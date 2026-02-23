@@ -3,6 +3,7 @@ import { MIGRATION_FILES_DIR, getMigrationFiles } from "@/auto-migrations/utils"
 import { Prisma } from "@/generated/prisma/client";
 import { getClickhouseAdminClient } from "@/lib/clickhouse";
 import { globalPrismaClient, globalPrismaSchema, sqlQuoteIdent } from "@/prisma-client";
+import { getEnvVariable } from "@stackframe/stack-shared/dist/utils/env";
 import { spawnSync } from "child_process";
 import fs from "fs";
 import path from "path";
@@ -17,9 +18,13 @@ const dropSchema = async () => {
   await globalPrismaClient.$executeRaw(Prisma.sql`CREATE SCHEMA ${sqlQuoteIdent(globalPrismaSchema)}`);
   await globalPrismaClient.$executeRaw(Prisma.sql`GRANT ALL ON SCHEMA ${sqlQuoteIdent(globalPrismaSchema)} TO postgres`);
   await globalPrismaClient.$executeRaw(Prisma.sql`GRANT ALL ON SCHEMA ${sqlQuoteIdent(globalPrismaSchema)} TO public`);
-  const clickhouseClient = getClickhouseClient();
-  await clickhouseClient.command({ query: "DROP DATABASE IF EXISTS analytics_internal" });
-  await clickhouseClient.command({ query: "CREATE DATABASE IF NOT EXISTS analytics_internal" });
+  
+  const clickhouseUrl = getEnvVariable("STACK_CLICKHOUSE_URL", "");
+  if (clickhouseUrl) {
+    const clickhouseClient = getClickhouseClient();
+    await clickhouseClient.command({ query: "DROP DATABASE IF EXISTS analytics_internal" });
+    await clickhouseClient.command({ query: "CREATE DATABASE IF NOT EXISTS analytics_internal" });
+  }
 };
 
 
@@ -167,7 +172,12 @@ const migrate = async (selectedMigrationFiles?: { migrationName: string, sql: st
 
   console.log('='.repeat(60) + '\n');
 
-  await runClickhouseMigrations();
+  const clickhouseUrl = getEnvVariable("STACK_CLICKHOUSE_URL", "");
+  if (clickhouseUrl) {
+    await runClickhouseMigrations();
+  } else {
+    console.log("[Clickhouse] Skipping Clickhouse migrations (STACK_CLICKHOUSE_URL not set)");
+  }
 
   return result;
 };

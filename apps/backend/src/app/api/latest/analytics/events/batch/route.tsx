@@ -64,30 +64,35 @@ export const POST = createSmartRouteHandler({
     const prisma = await getPrismaClientForTenancy(auth.tenancy);
     const recentSession = await findRecentSessionReplay(prisma, { tenancyId, refreshTokenId });
 
-    const clickhouseClient = getClickhouseAdminClient();
+    try {
+      const clickhouseClient = getClickhouseAdminClient();
 
-    const rows = body.events.map((event) => ({
-      event_type: event.event_type,
-      event_at: new Date(event.event_at_ms),
-      data: event.data,
-      project_id: projectId,
-      branch_id: branchId,
-      user_id: userId,
-      team_id: null,
-      refresh_token_id: refreshTokenId,
-      session_replay_id: recentSession?.id ?? null,
-      session_replay_segment_id: body.session_replay_segment_id,
-    }));
+      const rows = body.events.map((event) => ({
+        event_type: event.event_type,
+        event_at: new Date(event.event_at_ms),
+        data: event.data,
+        project_id: projectId,
+        branch_id: branchId,
+        user_id: userId,
+        team_id: null,
+        refresh_token_id: refreshTokenId,
+        session_replay_id: recentSession?.id ?? null,
+        session_replay_segment_id: body.session_replay_segment_id,
+      }));
 
-    await clickhouseClient.insert({
-      table: "analytics_internal.events",
-      values: rows,
-      format: "JSONEachRow",
-      clickhouse_settings: {
-        date_time_input_format: "best_effort",
-        async_insert: 1,
-      },
-    });
+      await clickhouseClient.insert({
+        table: "analytics_internal.events",
+        values: rows,
+        format: "JSONEachRow",
+        clickhouse_settings: {
+          date_time_input_format: "best_effort",
+          async_insert: 1,
+        },
+      });
+    } catch (error) {
+      // ClickHouse is optional, silently skip analytics if not available
+      // This allows the app to function without analytics infrastructure
+    }
 
     return {
       statusCode: 200,

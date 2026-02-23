@@ -51,6 +51,9 @@ COPY docs ./docs
 # https://nextjs.org/docs/pages/api-reference/next-config-js/output
 ENV NEXT_CONFIG_OUTPUT=standalone
 
+# Increase Node.js memory limits for build
+ENV NODE_OPTIONS="--max-old-space-size=8192"
+
 # Build the backend NextJS app
 RUN pnpm turbo run docker-build --filter=@stackframe/stack-backend... --filter=@stackframe/stack-dashboard...
 

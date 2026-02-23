@@ -1,8 +1,8 @@
-import { getPrismaClientForTenancy } from "@/prisma-client";
-import { uploadBytes } from "@/s3";
-import { createSmartRouteHandler } from "@/route-handlers/smart-route-handler";
 import { Prisma } from "@/generated/prisma/client";
 import { findRecentSessionReplay } from "@/lib/session-replays";
+import { getPrismaClientForTenancy } from "@/prisma-client";
+import { createSmartRouteHandler } from "@/route-handlers/smart-route-handler";
+import { uploadBytes } from "@/s3";
 import { KnownErrors } from "@stackframe/stack-shared";
 import { adaptSchema, clientOrHigherAuthTypeSchema, yupArray, yupMixed, yupNumber, yupObject, yupString } from "@stackframe/stack-shared/dist/schema-fields";
 import { StatusError } from "@stackframe/stack-shared/dist/utils/errors";
@@ -78,6 +78,12 @@ export const POST = createSmartRouteHandler({
     }
     if (!auth.refreshTokenId) {
       throw new StatusError(StatusError.BadRequest, "A refresh token is required for session replays");
+    }
+    
+    // Check if S3 is configured for session replays (private bucket required)
+    const s3PrivateBucket = process.env.STACK_S3_PRIVATE_BUCKET;
+    if (!s3PrivateBucket) {
+      throw new StatusError(StatusError.ServiceUnavailable, "Session replay storage is not configured. Please configure S3 private bucket.");
     }
     const projectUserId = auth.user.id;
     const refreshTokenId = auth.refreshTokenId;

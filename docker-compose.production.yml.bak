@@ -1,0 +1,37 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: stack-postgres-prod
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: stackframe
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  stack-auth:
+    image: stackauth/server:local
+    container_name: stack-auth-server
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env.production
+    environment:
+      STACK_DATABASE_CONNECTION_STRING: postgresql://postgres:password@postgres:5432/stackframe
+      NODE_ENV: production
+    ports:
+      - "8101:8101"
+      - "8102:8102"
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
