@@ -1,0 +1,71 @@
+Stack Auth Production Deployment
+=================================
+Deployment Date: Tue Feb 24 15:08:54 IST 2026
+
+URLS
+----
+Dashboard: https://stack-auth-dashboard.wittymushroom-8675bf34.centralindia.azurecontainerapps.io
+Backend API: https://stack-auth-backend.wittymushroom-8675bf34.centralindia.azurecontainerapps.io
+
+ADMIN CREDENTIALS
+-----------------
+Email: developer@manjugroups.in
+Password: Manju@2026
+
+RESOURCE CONFIGURATION
+----------------------
+Backend:
+- CPU: 4.0 cores
+- Memory: 8GB
+- Replicas: 2-10 (auto-scaling)
+- Concurrent Requests: 100 per replica
+
+Dashboard:
+- CPU: 2.0 cores
+- Memory: 4GB
+- Replicas: 2-5 (auto-scaling)
+- Concurrent Requests: 50 per replica
+
+Database:
+- SKU: Standard_D4s_v3
+- vCores: 4
+- Memory: 16GB
+- Storage: 128GB
+- Backup Retention: 30 days
+
+AZURE RESOURCES
+---------------
+Resource Group: manjuwellness-auth
+Location: centralindia
+Container Registry: stackauthreg1771923374
+Database Server: stackauthdb1771923374
+Container Environment: stack-auth-env
+
+SECRETS
+-------
+Stack Server Secret: vxk3ie1QqSONOZK8eeVEvcCoX1fjhiIlwL307iZVFcI=
+
+ESTIMATED MONTHLY COST
+----------------------
+- Container Apps (Backend): ~00-400
+- Container Apps (Dashboard): ~00-200
+- PostgreSQL (Standard_D4s_v3): ~50-300
+- Container Registry: ~
+- Log Analytics: ~0-20
+Total: ~65-925/month
+
+MANAGEMENT COMMANDS
+-------------------
+View backend logs:
+  az containerapp logs show --name stack-auth-backend --resource-group manjuwellness-auth --follow
+
+View dashboard logs:
+  az containerapp logs show --name stack-auth-dashboard --resource-group manjuwellness-auth --follow
+
+Scale backend:
+  az containerapp update --name stack-auth-backend --resource-group manjuwellness-auth --min-replicas 3 --max-replicas 15
+
+Monitor metrics:
+  az monitor metrics list --resource /subscriptions/a6d44e3b-94d3-497c-bc38-07a9ec0faf63/resourceGroups/manjuwellness-auth/providers/Microsoft.App/containerApps/stack-auth-backend
+
+IMPORTANT: Keep this file secure!

@@ -1,0 +1,92 @@
+Stack Auth Azure Deployment - COMPLETE
+==========================================
+Deployment Date: February 24, 2026
+Location: Central India
+
+URLS
+----
+Dashboard: https://stack-auth-dashboard.wittymushroom-8675bf34.centralindia.azurecontainerapps.io
+Backend API: https://stack-auth-backend.wittymushroom-8675bf34.centralindia.azurecontainerapps.io
+
+ADMIN CREDENTIALS
+-----------------
+Email: admin@manjuwellness.com
+Password: Admin123456!
+
+AZURE RESOURCES
+---------------
+Resource Group: manjuwellness-auth
+Location: centralindia
+
+Container Registry: stackauthreg1771923374
+Database Server: stackauthdb1771923374
+Container Environment: stack-auth-env
+
+Container Apps:
+- stack-auth-backend (1-3 replicas, 1 CPU, 2GB RAM)
+- stack-auth-dashboard (1-3 replicas, 0.5 CPU, 1GB RAM)
+
+DATABASE
+--------
+Server: stackauthdb1771923374.postgres.database.azure.com
+Database: stackframe
+Admin User: stackadmin
+Version: PostgreSQL 16
+
+MANAGEMENT COMMANDS
+-------------------
+View backend logs:
+  az containerapp logs show --name stack-auth-backend --resource-group manjuwellness-auth --follow
+
+View dashboard logs:
+  az containerapp logs show --name stack-auth-dashboard --resource-group manjuwellness-auth --follow
+
+Restart backend:
+  az containerapp revision restart --name stack-auth-backend --resource-group manjuwellness-auth
+
+Restart dashboard:
+  az containerapp revision restart --name stack-auth-dashboard --resource-group manjuwellness-auth
+
+Scale backend:
+  az containerapp update --name stack-auth-backend --resource-group manjuwellness-auth --min-replicas 2 --max-replicas 5
+
+Update environment variable:
+  az containerapp update --name stack-auth-backend --resource-group manjuwellness-auth --set-env-vars "KEY=value"
+
+View all resources:
+  az resource list --resource-group manjuwellness-auth --output table
+
+CLEANUP (Delete everything)
+----------------------------
+  az group delete --name manjuwellness-auth --yes
+
+ESTIMATED MONTHLY COST
+----------------------
+- Container Apps: $30-100 (depending on usage)
+- PostgreSQL Flexible Server: $15-30
+- Container Registry: $5
+- Total: ~$50-135/month
+
+NEXT STEPS
+----------
+1. Visit the dashboard URL and log in with the admin credentials
+2. Configure your authentication methods
+3. Set up your first project
+4. Integrate with your application
+
+NOTES
+-----
+- Email features are disabled (no Freestyle API key configured)
+- HTTPS is enabled automatically by Azure Container Apps
+- Auto-scaling is configured (1-3 replicas)
+- Database backups are enabled (30 days retention)
+
+TROUBLESHOOTING
+---------------
+If you see database connection errors, the migrations might still be running.
+Wait 2-3 minutes and refresh the page.
+
+To check if migrations completed:
+  az containerapp logs show --name stack-auth-backend --resource-group manjuwellness-auth --tail 100
+
+IMPORTANT: Keep this file secure! It contains sensitive information.

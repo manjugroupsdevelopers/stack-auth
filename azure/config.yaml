@@ -1,0 +1,104 @@
+# Stack Auth Azure Deployment Configuration
+# This file contains all configuration for deploying Stack Auth to Azure
+
+deployment:
+  name: manjuwellness-auth
+  location: centralindia
+  
+resources:
+  resourceGroup: manjuwellness-auth
+  
+  containerRegistry:
+    name: stackauthreg1771923374
+    sku: Basic
+    adminEnabled: true
+  
+  database:
+    serverName: stackauthdb1771923374
+    adminUser: stackadmin
+    # Password should be set via environment variable: AZURE_DB_PASSWORD
+    version: "16"
+    sku:
+      name: Standard_D4s_v3  # 4 vCores, 16GB RAM
+      tier: GeneralPurpose
+    storage:
+      sizeGB: 128
+      iops: 500
+    backup:
+      retentionDays: 30
+      geoRedundant: false
+    highAvailability:
+      enabled: false  # Set to true for production HA
+    database: stackframe
+    
+  containerEnvironment:
+    name: stack-auth-env
+    
+  containerApps:
+    backend:
+      name: stack-auth-backend
+      image: stackauthreg1771923374.azurecr.io/stackauth/server:latest
+      targetPort: 8102
+      ingress:
+        external: true
+      resources:
+        cpu: 4.0
+        memory: 8.0Gi
+      scale:
+        minReplicas: 2
+        maxReplicas: 10
+        rules:
+          - name: http-scaling
+            http:
+              concurrentRequests: 100
+      env:
+        NODE_ENV: production
+        STACK_SEED_INTERNAL_PROJECT_SIGN_UP_ENABLED: "true"
+        STACK_SEED_INTERNAL_PROJECT_ALLOW_LOCALHOST: "false"
+        STACK_SEED_INTERNAL_PROJECT_OTP_ENABLED: "true"
+        STACK_SEED_INTERNAL_PROJECT_USER_EMAIL: admin@manjuwellness.com
+        STACK_SEED_INTERNAL_PROJECT_USER_PASSWORD: Admin123456!
+        STACK_SEED_INTERNAL_PROJECT_USER_INTERNAL_ACCESS: "true"
+        # These will be set dynamically:
+        # STACK_DATABASE_CONNECTION_STRING
+        # STACK_SERVER_SECRET
+        # STACK_FREESTYLE_API_KEY
+        # NEXT_PUBLIC_STACK_DASHBOARD_URL
+    
+    dashboard:
+      name: stack-auth-dashboard
+      image: stackauthreg1771923374.azurecr.io/stackauth/server:latest
+      targetPort: 8101
+      ingress:
+        external: true
+      resources:
+        cpu: 2.0
+        memory: 4.0Gi
+      scale:
+        minReplicas: 2
+        maxReplicas: 5
+        rules:
+          - name: http-scaling
+            http:
+              concurrentRequests: 50
+      env:
+        NODE_ENV: production
+        STACK_SEED_INTERNAL_PROJECT_SIGN_UP_ENABLED: "true"
+        STACK_SEED_INTERNAL_PROJECT_ALLOW_LOCALHOST: "false"
+        STACK_SEED_INTERNAL_PROJECT_OTP_ENABLED: "true"
+        # These will be set dynamically:
+        # STACK_DATABASE_CONNECTION_STRING
+        # STACK_SERVER_SECRET
+        # STACK_FREESTYLE_API_KEY
+        # NEXT_PUBLIC_STACK_API_URL
+
+# Secrets (should be stored in Azure Key Vault or environment variables)
+secrets:
+  # Generate with: openssl rand -base64 32
+  stackServerSecret: ${STACK_SERVER_SECRET}
+  
+  # Get from https://freestyle.sh (optional)
+  freestyleApiKey: ${STACK_FREESTYLE_API_KEY:-not-configured}
+  
+  # Database password
+  databasePassword: ${AZURE_DB_PASSWORD}
