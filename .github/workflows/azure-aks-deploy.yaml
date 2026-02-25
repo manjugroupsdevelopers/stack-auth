@@ -1,0 +1,87 @@
+name: Build and Push to Azure Container Registry
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/dev' }}
+
+env:
+  ACR_NAME: stackauthacr2025
+  RESOURCE_GROUP: manjuwellness-auth
+  AKS_CLUSTER: stack-auth-aks
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Azure CLI set subscription
+        run: |
+          az account set --subscription ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Get ACR credentials
+        run: |
+          echo "::add-mask::${{ secrets.AZURE_CLIENT_ID }}"
+          echo "::add-mask::${{ secrets.AZURE_TENANT_ID }}"
+          echo "::add-mask::${{ secrets.AZURE_SUBSCRIPTION_ID }}"
+
+      - name: Build and push image
+        run: |
+          IMAGE_TAG=$(echo ${{ github.sha }} | cut -c1-8)
+          
+          # Build the image
+          az acr build \
+            --registry ${{ env.ACR_NAME }} \
+            --image stack-auth/server:latest \
+            --image stack-auth/server:$IMAGE_TAG \
+            --file ./docker/server/Dockerfile \
+            --build-arg BUILDKIT_INLINE_CACHE=1 \
+            .
+          
+          # Tag with git sha
+          az acr import \
+            --registry ${{ env.ACR_NAME }} \
+            --source stackauthacr2025.azurecr.io/stack-auth/server:latest \
+            --image stack-auth/server:$IMAGE_TAG \
+            --force
+
+      - name: Update deployment with new image
+        run: |
+          IMAGE_TAG=$(echo ${{ github.sha }} | cut -c1-8)
+          echo "Updating AKS deployment with image tag: $IMAGE_TAG"
+          
+          # Get AKS credentials
+          az aks get-credentials \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --name ${{ env.AKS_CLUSTER }} \
+            --overwrite-existing
+          
+          # Update the deployment image
+          kubectl set image deployment/stack-auth \
+            stack-auth=${{ env.ACR_NAME }}.azurecr.io/stack-auth/server:$IMAGE_TAG \
+            --namespace stack-auth
+
+      - name: Verify deployment
+        run: |
+          kubectl rollout status deployment/stack-auth --namespace stack-auth --timeout=300s
+          kubectl get pods --namespace stack-auth
+
+      - name: Azure logout
+        if: always()
+        run: |
+          az logout

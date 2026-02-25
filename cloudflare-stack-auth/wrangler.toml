@@ -1,0 +1,25 @@
+name = "stack-auth"
+main = "src/index.js"
+compatibility_date = "2026-02-25"
+
+[[containers]]
+class_name = "StackAuthContainer"
+image = "./Dockerfile"
+max_instances = 5
+
+[[durable_objects.bindings]]
+class_name = "StackAuthContainer"
+name = "STACK_AUTH_CONTAINER"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["StackAuthContainer"]
+
+[env.production]
+containers = [
+  {
+    class_name = "StackAuthContainer"
+    image = "./Dockerfile"
+    max_instances = 10
+  }
+]

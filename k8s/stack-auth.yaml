@@ -1,0 +1,112 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stack-auth
+  namespace: stack-auth
+  labels:
+    app: stack-auth
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: stack-auth
+  template:
+    metadata:
+      labels:
+        app: stack-auth
+    spec:
+      imagePullSecrets:
+        - name: acr-secret
+      containers:
+        - name: stack-auth
+          image: stackauthacr2025.azurecr.io/stack-auth/server:amd64
+          ports:
+            - containerPort: 8101
+              name: dashboard
+            - containerPort: 8102
+              name: backend
+          env:
+            - name: NODE_ENV
+              value: "production"
+            - name: STACK_DATABASE_CONNECTION_STRING
+              value: "postgresql://postgres:password@postgres.stack-auth.svc.cluster.local:5432/stackframe"
+            - name: STACK_SERVER_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: stack-auth-secrets
+                  key: stack-server-secret
+            - name: STACK_FREESTYLE_API_KEY
+              value: "not-configured"
+            - name: NEXT_PUBLIC_STACK_API_URL
+              value: "http://20.219.202.94"
+            - name: NEXT_PUBLIC_STACK_DASHBOARD_URL
+              value: "http://20.219.168.54"
+            - name: STACK_SEED_INTERNAL_PROJECT_SIGN_UP_ENABLED
+              value: "true"
+            - name: STACK_SEED_INTERNAL_PROJECT_ALLOW_LOCALHOST
+              value: "true"
+            - name: STACK_SEED_INTERNAL_PROJECT_OTP_ENABLED
+              value: "true"
+            - name: STACK_SEED_INTERNAL_PROJECT_USER_EMAIL
+              value: "admin@manjuwellness.com"
+            - name: STACK_SEED_INTERNAL_PROJECT_USER_PASSWORD
+              value: "Admin123456!"
+            - name: STACK_SEED_INTERNAL_PROJECT_USER_INTERNAL_ACCESS
+              value: "true"
+            - name: STACK_SKIP_SEED_SCRIPT
+              value: "false"
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "2"
+              memory: "4Gi"
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8102
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8102
+            initialDelaySeconds: 60
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 6
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: stack-auth-backend
+  namespace: stack-auth
+  labels:
+    app: stack-auth
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 80
+      targetPort: 8102
+      name: backend
+  selector:
+    app: stack-auth
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: stack-auth-dashboard
+  namespace: stack-auth
+  labels:
+    app: stack-auth
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 80
+      targetPort: 8101
+      name: dashboard
+  selector:
+    app: stack-auth
