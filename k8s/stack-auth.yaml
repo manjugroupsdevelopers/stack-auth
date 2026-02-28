@@ -38,9 +38,9 @@ spec:
             - name: STACK_FREESTYLE_API_KEY
               value: "not-configured"
             - name: NEXT_PUBLIC_STACK_API_URL
-              value: "http://20.219.202.94"
+              value: "https://api.manjuauth.aivida.in"
             - name: NEXT_PUBLIC_STACK_DASHBOARD_URL
-              value: "http://20.219.168.54"
+              value: "https://manjuauth.aivida.in"
             - name: STACK_SEED_INTERNAL_PROJECT_SIGN_UP_ENABLED
               value: "true"
             - name: STACK_SEED_INTERNAL_PROJECT_ALLOW_LOCALHOST

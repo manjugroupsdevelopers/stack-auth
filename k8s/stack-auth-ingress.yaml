@@ -1,0 +1,36 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: stack-auth-ingress
+  namespace: stack-auth
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  tls:
+    - secretName: stack-auth-tls
+      hosts:
+        - manjuauth.aivida.in
+        - api.manjuauth.aivida.in
+  rules:
+    - host: manjuauth.aivida.in
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: stack-auth-dashboard
+                port:
+                  number: 80
+    - host: api.manjuauth.aivida.in
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: stack-auth-backend
+                port:
+                  number: 80
