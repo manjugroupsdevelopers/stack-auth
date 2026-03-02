@@ -223,32 +223,36 @@ jobs:
 
           BACKEND_POD=$(kubectl -n "${NAMESPACE_APP}" get pods -l app=stack-auth -o jsonpath='{.items[0].metadata.name}')
 
-          kubectl exec -n "${NAMESPACE_APP}" "${BACKEND_POD}" -- node -e '
-          const url = process.env.STACK_SANDBOX_API_URL + "/execute";
+          kubectl exec -i -n "${NAMESPACE_APP}" "${BACKEND_POD}" -- node <<'NODE'
+          const url = process.env.STACK_SANDBOX_API_URL + '/execute';
           const token = process.env.STACK_SANDBOX_API_TOKEN;
           const body = {
-            requestId: "github-actions-smoke-" + Date.now(),
+            requestId: 'github-actions-smoke-' + Date.now(),
             timeoutMs: 90000,
-            code: "export default async function(){ return { status: \\"ok\\", data: { ok: true } }; }",
-            nodeModules: {}
+            code: 'export default async function(){ return { status: "ok", data: { ok: true } }; }',
+            nodeModules: {},
           };
+
           fetch(url, {
-            method: "POST",
-            headers: { Authorization: `Bearer ${token}`, "content-type": "application/json" },
-            body: JSON.stringify(body)
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'content-type': 'application/json',
+            },
+            body: JSON.stringify(body),
           })
             .then(async (res) => {
               const txt = await res.text();
               if (!res.ok) throw new Error(`HTTP ${res.status}: ${txt}`);
               const parsed = JSON.parse(txt);
-              if (parsed.status !== "ok") throw new Error(`Execute failed: ${txt}`);
-              console.log("sandbox smoke ok");
+              if (parsed.status !== 'ok') throw new Error(`Execute failed: ${txt}`);
+              console.log('sandbox smoke ok');
             })
             .catch((err) => {
               console.error(err);
               process.exit(1);
             });
-          '
+          NODE
 
       - name: Azure logout
         if: always()
