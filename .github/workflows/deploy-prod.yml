@@ -119,6 +119,15 @@ jobs:
           kubectl apply -f k8s/sandbox-api-service.yaml
           kubectl apply -f k8s/sandbox-network-policy.yaml
           kubectl apply -f k8s/sandbox-api-deployment.yaml
+
+          # Clear legacy literal envs so stack-auth.yaml can set valueFrom entries cleanly.
+          if kubectl -n "${NAMESPACE_APP}" get deployment stack-auth >/dev/null 2>&1; then
+            kubectl -n "${NAMESPACE_APP}" set env deployment/stack-auth \
+              STACK_SEED_INTERNAL_PROJECT_PUBLISHABLE_CLIENT_KEY- \
+              STACK_SEED_INTERNAL_PROJECT_SECRET_SERVER_KEY- \
+              STACK_SEED_INTERNAL_PROJECT_SUPER_SECRET_ADMIN_KEY-
+          fi
+
           kubectl apply -f k8s/stack-auth.yaml
 
       - name: Ensure ACR pull secret in sandbox namespace
