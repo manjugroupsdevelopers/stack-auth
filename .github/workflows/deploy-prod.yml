@@ -20,6 +20,7 @@ jobs:
   deploy:
     name: Build, Push, and Deploy Stack Auth + Sandbox
     runs-on: ubuntu-latest
+    environment: Production
     timeout-minutes: 120
     env:
       NAMESPACE_APP: stack-auth
