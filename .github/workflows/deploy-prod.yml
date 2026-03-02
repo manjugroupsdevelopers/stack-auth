@@ -1,0 +1,245 @@
+name: Deploy Production (AKS)
+
+on:
+  workflow_dispatch:
+    inputs:
+      commit_sha:
+        description: Commit SHA to deploy
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build, Push, and Deploy Stack Auth + Sandbox
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      NAMESPACE_APP: stack-auth
+      NAMESPACE_SANDBOX: stack-auth-sandbox
+
+      ACR_NAME: stackauthacr2025
+      ACR_LOGIN_SERVER: stackauthacr2025.azurecr.io
+      AZURE_RESOURCE_GROUP: manjuwellness-auth
+      AKS_CLUSTER_NAME: stack-auth-aks
+
+      BACKEND_IMAGE_NAME: stack-auth/server
+      SANDBOX_API_IMAGE_NAME: stack-auth/sandbox-api
+      SANDBOX_RUNNER_IMAGE_NAME: stack-auth/sandbox-runner
+
+    steps:
+      - name: Checkout selected commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit_sha }}
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Set Azure subscription
+        shell: bash
+        run: |
+          set -euo pipefail
+          az account set --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: ACR login
+        shell: bash
+        run: |
+          set -euo pipefail
+          az acr login --name "${ACR_NAME}"
+
+      - name: Build and push backend + sandbox images
+        shell: bash
+        run: |
+          set -euo pipefail
+          IMAGE_TAG="${{ inputs.commit_sha }}-prod"
+
+          BACKEND_IMAGE="${ACR_LOGIN_SERVER}/${BACKEND_IMAGE_NAME}:${IMAGE_TAG}"
+          SANDBOX_API_IMAGE="${ACR_LOGIN_SERVER}/${SANDBOX_API_IMAGE_NAME}:${IMAGE_TAG}"
+          SANDBOX_RUNNER_IMAGE="${ACR_LOGIN_SERVER}/${SANDBOX_RUNNER_IMAGE_NAME}:${IMAGE_TAG}"
+
+          docker buildx build --platform linux/amd64 \
+            -f docker/server/Dockerfile \
+            -t "${BACKEND_IMAGE}" \
+            --push .
+
+          docker buildx build --platform linux/amd64 \
+            -f apps/sandbox-api/Dockerfile \
+            -t "${SANDBOX_API_IMAGE}" \
+            --push apps/sandbox-api
+
+          docker buildx build --platform linux/amd64 \
+            -f apps/sandbox-api/runner/Dockerfile \
+            -t "${SANDBOX_RUNNER_IMAGE}" \
+            --push apps/sandbox-api/runner
+
+          {
+            echo "IMAGE_TAG=${IMAGE_TAG}"
+            echo "BACKEND_IMAGE=${BACKEND_IMAGE}"
+            echo "SANDBOX_API_IMAGE=${SANDBOX_API_IMAGE}"
+            echo "SANDBOX_RUNNER_IMAGE=${SANDBOX_RUNNER_IMAGE}"
+          } >> "$GITHUB_ENV"
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: AKS context
+        shell: bash
+        run: |
+          set -euo pipefail
+          az aks get-credentials \
+            --resource-group "${AZURE_RESOURCE_GROUP}" \
+            --name "${AKS_CLUSTER_NAME}" \
+            --overwrite-existing
+
+      - name: Ensure namespaces and base manifests
+        shell: bash
+        run: |
+          set -euo pipefail
+          kubectl create namespace "${NAMESPACE_APP}" --dry-run=client -o yaml | kubectl apply -f -
+          kubectl create namespace "${NAMESPACE_SANDBOX}" --dry-run=client -o yaml | kubectl apply -f -
+
+          kubectl apply -f k8s/sandbox-namespace.yaml
+          kubectl apply -f k8s/sandbox-api-rbac.yaml
+          kubectl apply -f k8s/sandbox-api-service.yaml
+          kubectl apply -f k8s/sandbox-network-policy.yaml
+          kubectl apply -f k8s/sandbox-api-deployment.yaml
+          kubectl apply -f k8s/stack-auth.yaml
+
+      - name: Ensure ACR pull secret in sandbox namespace
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! kubectl get secret acr-secret -n "${NAMESPACE_APP}" >/dev/null 2>&1; then
+            echo "Missing ${NAMESPACE_APP}/acr-secret"
+            exit 1
+          fi
+
+          kubectl get secret acr-secret -n "${NAMESPACE_APP}" -o json \
+            | jq 'del(.metadata.uid,.metadata.resourceVersion,.metadata.creationTimestamp,.metadata.annotations,.metadata.managedFields) | .metadata.namespace = "'"${NAMESPACE_SANDBOX}"'"' \
+            | kubectl apply -f -
+
+      - name: Upsert runtime secrets
+        shell: bash
+        env:
+          STACK_SERVER_SECRET: ${{ secrets.STACK_SERVER_SECRET }}
+          STACK_SANDBOX_API_TOKEN: ${{ secrets.STACK_SANDBOX_API_TOKEN }}
+          STACK_SANDBOX_CALLBACK_TOKEN: ${{ secrets.STACK_SANDBOX_CALLBACK_TOKEN }}
+          STACK_INTERNAL_PROJECT_PUBLISHABLE_CLIENT_KEY: ${{ secrets.STACK_INTERNAL_PROJECT_PUBLISHABLE_CLIENT_KEY }}
+          STACK_INTERNAL_PROJECT_SECRET_SERVER_KEY: ${{ secrets.STACK_INTERNAL_PROJECT_SECRET_SERVER_KEY }}
+          STACK_INTERNAL_PROJECT_SUPER_SECRET_ADMIN_KEY: ${{ secrets.STACK_INTERNAL_PROJECT_SUPER_SECRET_ADMIN_KEY }}
+        run: |
+          set -euo pipefail
+
+          kubectl get secret stack-auth-secrets -n "${NAMESPACE_APP}" >/dev/null 2>&1 || \
+            kubectl create secret generic stack-auth-secrets -n "${NAMESPACE_APP}"
+          kubectl get secret stack-auth-secrets -n "${NAMESPACE_SANDBOX}" >/dev/null 2>&1 || \
+            kubectl create secret generic stack-auth-secrets -n "${NAMESPACE_SANDBOX}"
+
+          app_patch=$(jq -n \
+            --arg server_secret "${STACK_SERVER_SECRET}" \
+            --arg sandbox_api_token "${STACK_SANDBOX_API_TOKEN}" \
+            --arg publishable "${STACK_INTERNAL_PROJECT_PUBLISHABLE_CLIENT_KEY}" \
+            --arg secret_server "${STACK_INTERNAL_PROJECT_SECRET_SERVER_KEY}" \
+            --arg super_admin "${STACK_INTERNAL_PROJECT_SUPER_SECRET_ADMIN_KEY}" \
+            '{stringData:{
+              "stack-server-secret":$server_secret,
+              "stack-sandbox-api-token":$sandbox_api_token,
+              "stack-seed-internal-project-publishable-client-key":$publishable,
+              "stack-seed-internal-project-secret-server-key":$secret_server,
+              "stack-seed-internal-project-super-secret-admin-key":$super_admin
+            }}')
+          kubectl patch secret stack-auth-secrets -n "${NAMESPACE_APP}" --type merge -p "${app_patch}"
+
+          sandbox_patch=$(jq -n \
+            --arg sandbox_api_token "${STACK_SANDBOX_API_TOKEN}" \
+            --arg callback_token "${STACK_SANDBOX_CALLBACK_TOKEN}" \
+            '{stringData:{
+              "stack-sandbox-api-token":$sandbox_api_token,
+              "stack-sandbox-callback-token":$callback_token
+            }}')
+          kubectl patch secret stack-auth-secrets -n "${NAMESPACE_SANDBOX}" --type merge -p "${sandbox_patch}"
+
+      - name: Set images and runtime env overrides
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          kubectl -n "${NAMESPACE_APP}" set image deployment/stack-auth \
+            stack-auth="${BACKEND_IMAGE}"
+
+          kubectl -n "${NAMESPACE_SANDBOX}" set image deployment/sandbox-api \
+            sandbox-api="${SANDBOX_API_IMAGE}"
+
+          kubectl -n "${NAMESPACE_APP}" set env deployment/stack-auth \
+            STACK_JS_EXECUTION_ENGINE=self-hosted-sandbox \
+            STACK_SANDBOX_TIMEOUT_MS=90000 \
+            STACK_SKIP_MIGRATIONS=true \
+            STACK_SKIP_SEED_SCRIPT=true
+
+          kubectl -n "${NAMESPACE_SANDBOX}" set env deployment/sandbox-api \
+            STACK_SANDBOX_RUNNER_IMAGE="${SANDBOX_RUNNER_IMAGE}" \
+            STACK_SANDBOX_RUNNER_ACTIVE_DEADLINE_SECONDS=120 \
+            STACK_SANDBOX_MAX_TIMEOUT_MS=120000
+
+      - name: Wait for rollouts
+        shell: bash
+        run: |
+          set -euo pipefail
+          kubectl rollout status deployment/stack-auth -n "${NAMESPACE_APP}" --timeout=300s
+          kubectl rollout status deployment/sandbox-api -n "${NAMESPACE_SANDBOX}" --timeout=300s
+
+      - name: Post-deploy smoke checks
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          kubectl get pods -n "${NAMESPACE_APP}" -l app=stack-auth
+          kubectl get pods -n "${NAMESPACE_SANDBOX}" -l app=sandbox-api
+
+          BACKEND_POD=$(kubectl -n "${NAMESPACE_APP}" get pods -l app=stack-auth -o jsonpath='{.items[0].metadata.name}')
+
+          kubectl exec -n "${NAMESPACE_APP}" "${BACKEND_POD}" -- node -e '
+          const url = process.env.STACK_SANDBOX_API_URL + "/execute";
+          const token = process.env.STACK_SANDBOX_API_TOKEN;
+          const body = {
+            requestId: "github-actions-smoke-" + Date.now(),
+            timeoutMs: 90000,
+            code: "export default async function(){ return { status: \\"ok\\", data: { ok: true } }; }",
+            nodeModules: {}
+          };
+          fetch(url, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token}`, "content-type": "application/json" },
+            body: JSON.stringify(body)
+          })
+            .then(async (res) => {
+              const txt = await res.text();
+              if (!res.ok) throw new Error(`HTTP ${res.status}: ${txt}`);
+              const parsed = JSON.parse(txt);
+              if (parsed.status !== "ok") throw new Error(`Execute failed: ${txt}`);
+              console.log("sandbox smoke ok");
+            })
+            .catch((err) => {
+              console.error(err);
+              process.exit(1);
+            });
+          '
+
+      - name: Azure logout
+        if: always()
+        run: az logout

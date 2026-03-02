@@ -1,0 +1,70 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: sandbox-api-ingress
+  namespace: stack-auth-sandbox
+spec:
+  podSelector:
+    matchLabels:
+      app: sandbox-api
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: stack-auth
+          podSelector:
+            matchLabels:
+              app: stack-auth
+      ports:
+        - protocol: TCP
+          port: 8080
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: default
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: sandbox-runner-egress
+  namespace: stack-auth-sandbox
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: sandbox-runner
+  policyTypes:
+    - Egress
+  egress:
+    # Callback result back to sandbox-api service
+    - to:
+        - podSelector:
+            matchLabels:
+              app: sandbox-api
+      ports:
+        - protocol: TCP
+          port: 8080
+    # DNS resolution via cluster DNS
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Runtime package install over HTTPS (phase 1)
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 443

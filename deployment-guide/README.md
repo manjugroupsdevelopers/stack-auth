@@ -65,40 +65,84 @@ kubectl get svc -n stack-auth
 
 ## Building and Pushing Docker Image
 
-### Option 1: Local Build
+### Step 1: Login to Azure
 
 ```bash
-# Build for amd64 platform (required for AKS)
-docker build --platform linux/amd64 -f docker/server/Dockerfile -t stackauthacr2025.azurecr.io/stack-auth/server:v1 .
+# Login to Azure
+az login
+
+# Set correct subscription
+az account set --subscription a6d44e3b-94d3-497c-bc38-07a9ec0faf63
 
 # Login to ACR
 az acr login --name stackauthacr2025
-
-# Push to ACR
-docker push stackauthacr2025.azurecr.io/stack-auth/server:v1
-docker tag stackauthacr2025.azurecr.io/stack-auth/server:v1 stackauthacr2025.azurecr.io/stack-auth/server:latest
-docker push stackauthacr2025.azurecr.io/stack-auth/server:latest
 ```
 
-### Option 2: Using ACR Build
+### Step 2: Build and Push
+
+#### Option A: Local Build (Recommended)
 
 ```bash
-az acr build --registry stackauthacr2025 --image stack-auth/server:v1 --file ./docker/server/Dockerfile .
+# Get current git commit SHA for version tag
+TAG=$(git rev-parse --short HEAD)
+
+# Build for amd64 platform (required for AKS)
+docker build --platform linux/amd64 -f docker/server/Dockerfile \
+  -t stackauthacr2025.azurecr.io/stack-auth/server:$TAG .
+
+# Push with git SHA tag
+docker push stackauthacr2025.azurecr.io/stack-auth/server:$TAG
+
+# Also tag as amd64 (used by K8s deployment)
+docker tag stackauthacr2025.azurecr.io/stack-auth/server:$TAG \
+  stackauthacr2025.azurecr.io/stack-auth/server:amd64
+
+docker push stackauthacr2025.azurecr.io/stack-auth/server:amd64
+```
+
+#### Option B: ACR Build
+
+```bash
+az acr build \
+  --registry stackauthacr2025 \
+  --image stack-auth/server:amd64 \
+  --file ./docker/server/Dockerfile \
+  .
+```
+
+### Step 3: Deploy
+
+```bash
+# Restart deployment to pull new image
+kubectl rollout restart deployment/stack-auth -n stack-auth
+
+# Check rollout status
+kubectl rollout status deployment/stack-auth -n stack-auth --timeout=300s
+
+# Verify pods are running
+kubectl get pods -n stack-auth
+```
+
+### Quick One-Liner
+
+```bash
+# Build, push & deploy all at once
+docker build --platform linux/amd64 -f docker/server/Dockerfile -t stackauthacr2025.azurecr.io/stack-auth/server:amd64 . && az acr login --name stackauthacr2025 && docker push stackauthacr2025.azurecr.io/stack-auth/server:amd64 && kubectl rollout restart deployment/stack-auth -n stack-auth
 ```
 
 ## Updating Deployment
 
-After pushing a new image:
+After building and pushing a new image (see above):
 
 ```bash
-# Option 1: Update image tag in k8s/stack-auth.yaml and apply
-kubectl apply -f k8s/stack-auth.yaml
-
-# Option 2: Just restart deployment to pull latest image
+# Restart deployment to pull latest image
 kubectl rollout restart deployment/stack-auth -n stack-auth
 
 # Check rollout status
-kubectl rollout status deployment/stack-auth -n stack-auth
+kubectl rollout status deployment/stack-auth -n stack-auth --timeout=300s
+
+# Verify
+kubectl get pods -n stack-auth
 ```
 
 ## Environment Variables
@@ -112,6 +156,25 @@ Key environment variables in `k8s/stack-auth.yaml`:
 | `STACK_DATABASE_CONNECTION_STRING` | PostgreSQL connection string |
 | `STACK_SEED_INTERNAL_PROJECT_SIGN_UP_ENABLED` | Enable sign up |
 | `STACK_SKIP_SEED_SCRIPT` | Skip database seeding |
+
+## Data Persistence
+
+**Yes, your data persists across deployments!**
+
+- Database data is stored on Azure PersistentVolume (managed disk)
+- Data is preserved when you restart or redeploy the application
+- Data will ONLY be lost if you:
+  - Delete the PVC: `kubectl delete pvc postgres-pvc -n stack-auth`
+  - Delete the namespace: `kubectl delete namespace stack-auth`
+  - Delete the AKS node resource group
+
+### Backup Recommendation
+
+For production, set up Azure Backup for the disk:
+```bash
+# List disks in resource group
+az disk list -g MC_manjuwellness-auth_stack-auth-aks_centralindia -o table
+```
 
 ## CI/CD Setup
 

@@ -1,4 +1,5 @@
 import { getEmailDraft, themeModeToTemplateThemeId } from "@/lib/email-drafts";
+import { assertEmailRenderingEngineReadyForSendEmailEndpoint } from "@/lib/email-rendering-engine-readiness";
 import { createTemplateComponentFromHtml } from "@/lib/email-rendering";
 import { sendEmailToMany } from "@/lib/emails";
 import { getNotificationCategoryByName } from "@/lib/notification-categories";
@@ -6,8 +7,7 @@ import { getPrismaClientForTenancy } from "@/prisma-client";
 import { createSmartRouteHandler } from "@/route-handlers/smart-route-handler";
 import { KnownErrors } from "@stackframe/stack-shared";
 import { adaptSchema, jsonSchema, serverOrHigherAuthTypeSchema, templateThemeIdSchema, yupArray, yupBoolean, yupNumber, yupObject, yupRecord, yupString, yupUnion } from "@stackframe/stack-shared/dist/schema-fields";
-import { getEnvVariable } from "@stackframe/stack-shared/dist/utils/env";
-import { StatusError, throwErr } from "@stackframe/stack-shared/dist/utils/errors";
+import { throwErr } from "@stackframe/stack-shared/dist/utils/errors";
 
 type UserResult = {
   user_id: string,
@@ -62,9 +62,7 @@ export const POST = createSmartRouteHandler({
     }).defined(),
   }),
   handler: async ({ body, auth }) => {
-    if (!getEnvVariable("STACK_FREESTYLE_API_KEY")) {
-      throw new StatusError(500, "STACK_FREESTYLE_API_KEY is not set");
-    }
+    assertEmailRenderingEngineReadyForSendEmailEndpoint();
     if (auth.tenancy.config.emails.server.isShared) {
       throw new KnownErrors.RequiresCustomEmailServer();
     }

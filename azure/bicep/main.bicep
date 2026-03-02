@@ -25,6 +25,16 @@ param stackServerSecret string
 @secure()
 param freestyleApiKey string = 'not-configured'
 
+@description('Sandbox API token for self-hosted JS execution')
+@secure()
+param sandboxApiToken string = 'not-configured'
+
+@description('JS execution engine mode for backend')
+param jsExecutionEngine string = 'legacy'
+
+@description('Internal sandbox API URL reachable by backend')
+param sandboxApiUrl string = 'http://sandbox-api.stack-auth-sandbox.svc.cluster.local:8080'
+
 @description('Admin email for initial user')
 param adminEmail string = 'admin@manjuwellness.com'
 
@@ -156,6 +166,10 @@ resource backendApp 'Microsoft.App/containerApps@2023-05-01' = {
           value: freestyleApiKey
         }
         {
+          name: 'sandbox-api-token'
+          value: sandboxApiToken
+        }
+        {
           name: 'admin-password'
           value: adminPassword
         }
@@ -186,6 +200,26 @@ resource backendApp 'Microsoft.App/containerApps@2023-05-01' = {
             {
               name: 'STACK_FREESTYLE_API_KEY'
               secretRef: 'freestyle-api-key'
+            }
+            {
+              name: 'STACK_JS_EXECUTION_ENGINE'
+              value: jsExecutionEngine
+            }
+            {
+              name: 'STACK_SANDBOX_API_URL'
+              value: sandboxApiUrl
+            }
+            {
+              name: 'STACK_SANDBOX_API_TOKEN'
+              secretRef: 'sandbox-api-token'
+            }
+            {
+              name: 'STACK_SANDBOX_TIMEOUT_MS'
+              value: '30000'
+            }
+            {
+              name: 'STACK_SANDBOX_ALLOWED_MODULES'
+              value: 'react@19.1.1,react-dom@19.1.1,@react-email/components@1.0.6,arktype@2.1.20'
             }
             {
               name: 'STACK_SEED_INTERNAL_PROJECT_SIGN_UP_ENABLED'

@@ -1,0 +1,74 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sandbox-api
+  namespace: stack-auth-sandbox
+  labels:
+    app: sandbox-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sandbox-api
+  template:
+    metadata:
+      labels:
+        app: sandbox-api
+    spec:
+      serviceAccountName: sandbox-api
+      imagePullSecrets:
+        - name: acr-secret
+      containers:
+        - name: sandbox-api
+          image: stackauthacr2025.azurecr.io/stack-auth/sandbox-api:amd64
+          ports:
+            - containerPort: 8080
+              name: http
+          env:
+            - name: PORT
+              value: "8080"
+            - name: STACK_SANDBOX_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: stack-auth-secrets
+                  key: stack-sandbox-api-token
+            - name: STACK_SANDBOX_CALLBACK_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: stack-auth-secrets
+                  key: stack-sandbox-callback-token
+            - name: STACK_SANDBOX_CALLBACK_BASE_URL
+              value: "http://sandbox-api.stack-auth-sandbox.svc.cluster.local:8080"
+            - name: STACK_SANDBOX_JOB_NAMESPACE
+              value: "stack-auth-sandbox"
+            - name: STACK_SANDBOX_RUNNER_SERVICE_ACCOUNT
+              value: "sandbox-runner"
+            - name: STACK_SANDBOX_RUNNER_IMAGE
+              value: "stackauthacr2025.azurecr.io/stack-auth/sandbox-runner:amd64"
+            - name: STACK_SANDBOX_ALLOWED_MODULES
+              value: "react@19.1.1,react-dom@19.1.1,@react-email/components@1.0.6,arktype@2.1.20"
+            - name: STACK_SANDBOX_JOB_TTL_SECONDS
+              value: "120"
+            - name: STACK_SANDBOX_RUNNER_ACTIVE_DEADLINE_SECONDS
+              value: "120"
+            - name: STACK_SANDBOX_MAX_TIMEOUT_MS
+              value: "120000"
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "256Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 15

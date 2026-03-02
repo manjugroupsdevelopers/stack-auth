@@ -35,8 +35,19 @@ spec:
                 secretKeyRef:
                   name: stack-auth-secrets
                   key: stack-server-secret
-            - name: STACK_FREESTYLE_API_KEY
-              value: "not-configured"
+            - name: STACK_JS_EXECUTION_ENGINE
+              value: "self-hosted-sandbox"
+            - name: STACK_SANDBOX_API_URL
+              value: "http://sandbox-api.stack-auth-sandbox.svc.cluster.local:8080"
+            - name: STACK_SANDBOX_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: stack-auth-secrets
+                  key: stack-sandbox-api-token
+            - name: STACK_SANDBOX_TIMEOUT_MS
+              value: "90000"
+            - name: STACK_SANDBOX_ALLOWED_MODULES
+              value: "react@19.1.1,react-dom@19.1.1,@react-email/components@1.0.6,arktype@2.1.20"
             - name: NEXT_PUBLIC_STACK_API_URL
               value: "https://api.manjuauth.aivida.in"
             - name: NEXT_PUBLIC_STACK_DASHBOARD_URL
@@ -54,7 +65,24 @@ spec:
             - name: STACK_SEED_INTERNAL_PROJECT_USER_INTERNAL_ACCESS
               value: "true"
             - name: STACK_SKIP_SEED_SCRIPT
-              value: "false"
+              value: "true"
+            - name: STACK_SKIP_MIGRATIONS
+              value: "true"
+            - name: STACK_SEED_INTERNAL_PROJECT_PUBLISHABLE_CLIENT_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: stack-auth-secrets
+                  key: stack-seed-internal-project-publishable-client-key
+            - name: STACK_SEED_INTERNAL_PROJECT_SECRET_SERVER_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: stack-auth-secrets
+                  key: stack-seed-internal-project-secret-server-key
+            - name: STACK_SEED_INTERNAL_PROJECT_SUPER_SECRET_ADMIN_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: stack-auth-secrets
+                  key: stack-seed-internal-project-super-secret-admin-key
           resources:
             requests:
               cpu: "500m"
