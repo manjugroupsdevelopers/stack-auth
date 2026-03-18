@@ -752,6 +752,19 @@ const SignUpRejected = createKnownErrorConstructor(
   (json: any) => [json.message] as const,
 );
 
+const BlockedEmailSignUpNotAllowed = createKnownErrorConstructor(
+  KnownError,
+  "BLOCKED_EMAIL_SIGN_UP_NOT_ALLOWED",
+  (message?: string) => [
+    403,
+    message ?? "This email address is blocked from creating a new account.",
+    {
+      message: message ?? "This email address is blocked from creating a new account.",
+    },
+  ] as const,
+  (json: any) => [json.message] as const,
+);
+
 const PasswordAuthenticationNotEnabled = createKnownErrorConstructor(
   KnownError,
   "PASSWORD_AUTHENTICATION_NOT_ENABLED",
@@ -1857,6 +1870,7 @@ export const KnownErrors = {
   BranchDoesNotExist,
   SignUpNotEnabled,
   SignUpRejected,
+  BlockedEmailSignUpNotAllowed,
   PasswordAuthenticationNotEnabled,
   PasskeyAuthenticationNotEnabled,
   AnonymousAccountsNotEnabled,

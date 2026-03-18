@@ -7,6 +7,7 @@ import type { MoneyAmount } from "@stackframe/stack-shared/dist/utils/currency-c
 import type { EditableMetadata } from "@stackframe/stack-shared/dist/utils/jsx-editable-transpiler";
 import { Result } from "@stackframe/stack-shared/dist/utils/results";
 import { AsyncStoreProperty, EmailConfig } from "../../common";
+import { BlockedEmail, BlockedEmailCreateOptions } from "../../blocked-emails";
 import { AdminEmailOutbox, AdminSentEmail } from "../../email";
 import { InternalApiKey, InternalApiKeyCreateOptions, InternalApiKeyFirstView } from "../../internal-api-keys";
 import { AdminProjectPermission, AdminProjectPermissionDefinition, AdminProjectPermissionDefinitionCreateOptions, AdminProjectPermissionDefinitionUpdateOptions, AdminTeamPermission, AdminTeamPermissionDefinition, AdminTeamPermissionDefinitionCreateOptions, AdminTeamPermissionDefinitionUpdateOptions } from "../../permissions";
@@ -88,6 +89,9 @@ export type StackAdminApp<HasTokenStore extends boolean = boolean, ProjectId ext
     sendTestWebhook(options: { endpointId: string }): Promise<Result<undefined, { errorMessage: string }>>,
 
     sendSignInInvitationEmail(email: string, callbackUrl: string): Promise<void>,
+    listBlockedEmails(options?: { email?: string }): Promise<BlockedEmail[]>,
+    blockEmail(options: BlockedEmailCreateOptions): Promise<BlockedEmail>,
+    unblockEmail(id: string): Promise<void>,
 
     listSentEmails(): Promise<AdminSentEmail[]>,
 

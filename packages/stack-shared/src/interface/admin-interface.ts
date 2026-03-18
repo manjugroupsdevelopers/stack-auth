@@ -6,6 +6,7 @@ import type { MoneyAmount } from "../utils/currency-constants";
 import type { EditableMetadata } from "../utils/jsx-editable-transpiler";
 import { Result } from "../utils/results";
 import type { AnalyticsQueryOptions, AnalyticsQueryResponse } from "./crud/analytics";
+import { BlockedEmailsCrud } from "./crud/blocked-emails";
 import { EmailOutboxCrud } from "./crud/email-outbox";
 import { InternalEmailsCrud } from "./crud/emails";
 import { InternalApiKeysCrud } from "./crud/internal-api-keys";
@@ -149,6 +150,38 @@ export class StackAdminInterface extends StackServerInterface {
     const response = await this.sendAdminRequest("/internal/api-keys", {}, null);
     const result = await response.json() as InternalApiKeysCrud["Admin"]["List"];
     return result.items;
+  }
+
+  async listBlockedEmails(options?: { email?: string }): Promise<BlockedEmailsCrud["Admin"]["Read"][]> {
+    const searchParams = new URLSearchParams(options?.email ? { email: options.email } : {});
+    const response = await this.sendAdminRequest(`/blocked-emails${searchParams.size > 0 ? `?${searchParams.toString()}` : ""}`, {}, null);
+    const result = await response.json() as BlockedEmailsCrud["Admin"]["List"];
+    return result.items;
+  }
+
+  async createBlockedEmail(data: BlockedEmailsCrud["Admin"]["Create"]): Promise<BlockedEmailsCrud["Admin"]["Read"]> {
+    const response = await this.sendAdminRequest(
+      "/blocked-emails",
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify(data),
+      },
+      null,
+    );
+    return await response.json();
+  }
+
+  async deleteBlockedEmail(id: string): Promise<void> {
+    await this.sendAdminRequest(
+      `/blocked-emails/${id}`,
+      {
+        method: "DELETE",
+      },
+      null,
+    );
   }
 
   async revokeInternalApiKeyById(id: string) {

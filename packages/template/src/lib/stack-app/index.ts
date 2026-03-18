@@ -52,6 +52,11 @@ export type {
 } from "./contact-channels";
 
 export type {
+  BlockedEmail,
+  BlockedEmailCreateOptions
+} from "./blocked-emails";
+
+export type {
   AdminEmailOutbox,
   AdminEmailOutboxRecipient,
   AdminEmailOutboxSimpleStatus,
@@ -117,4 +122,3 @@ export type {
   ServerUser,
   User
 } from "./users";
-

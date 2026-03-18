@@ -1,4 +1,6 @@
 import { usersCrudHandlers } from "@/app/api/latest/users/crud";
+import { assertEmailNotBlockedForSignup } from "@/lib/blocked-emails";
+import { getPrismaClientForTenancy } from "@/prisma-client";
 import { KnownErrors } from "@stackframe/stack-shared";
 import { UsersCrud } from "@stackframe/stack-shared/dist/interface/crud/users";
 import { KeyIntersect } from "@stackframe/stack-shared/dist/utils/types";
@@ -43,6 +45,12 @@ export async function createOrUpgradeAnonymousUserWithRules(
   signUpRuleOptions: SignUpRuleOptions,
 ): Promise<UsersCrud["Admin"]["Read"]> {
   const email = createOrUpdate.primary_email ?? currentUser?.primary_email ?? undefined;
+  if (email != null) {
+    await assertEmailNotBlockedForSignup(await getPrismaClientForTenancy(tenancy), {
+      tenancyId: tenancy.id,
+      email,
+    });
+  }
   const ruleResult = await evaluateSignUpRules(tenancy, createSignUpRuleContext({
     email,
     authMethod: signUpRuleOptions.authMethod,
@@ -75,7 +83,7 @@ export async function createOrUpgradeAnonymousUserWithRules(
     tenancy,
     currentUser,
     enrichedCreateOrUpdate as KeyIntersect<UsersCrud["Admin"]["Create"], UsersCrud["Admin"]["Update"]>,
-    allowedErrorTypes,
+    [...allowedErrorTypes, KnownErrors.BlockedEmailSignUpNotAllowed],
   );
 
   return user;

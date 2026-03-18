@@ -1,6 +1,7 @@
 import { BooleanTrue, Prisma } from "@/generated/prisma/client";
 import { getRenderedOrganizationConfigQuery, getRenderedProjectConfigQuery } from "@/lib/config";
 import { demoteAllContactChannelsToNonPrimary, setContactChannelAsPrimaryByValue } from "@/lib/contact-channel";
+import { assertEmailNotBlockedForSignup } from "@/lib/blocked-emails";
 import { normalizeEmail } from "@/lib/emails";
 import { recordExternalDbSyncContactChannelDeletionsForUser, recordExternalDbSyncDeletion, withExternalDbSyncUpdate } from "@/lib/external-db-sync";
 import { grantDefaultProjectPermissions } from "@/lib/permissions";
@@ -231,6 +232,10 @@ async function checkAuthData(
     if (!data.primaryEmail) {
       throw new StackAssertionError("primary_email_auth_enabled cannot be true without primary_email");
     }
+    await assertEmailNotBlockedForSignup(tx, {
+      tenancyId: data.tenancyId,
+      email: data.primaryEmail,
+    });
     const existingChannelUsedForAuth = await tx.contactChannel.findFirst({
       where: {
         tenancyId: data.tenancyId,

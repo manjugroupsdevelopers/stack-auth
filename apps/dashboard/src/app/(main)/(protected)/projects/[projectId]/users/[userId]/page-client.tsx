@@ -43,12 +43,13 @@ import {
 } from "@/components/ui";
 import { DeleteUserDialog, ImpersonateUserDialog } from "@/components/user-dialogs";
 import { AtIcon, CalendarIcon, CheckIcon, DotsThreeIcon, EnvelopeIcon, HashIcon, ProhibitIcon, ShieldIcon, SquareIcon, XIcon } from "@phosphor-icons/react";
-import { ServerContactChannel, ServerOAuthProvider, ServerUser } from "@stackframe/stack";
+import { StackAdminApp, ServerContactChannel, ServerOAuthProvider, ServerUser } from "@stackframe/stack";
 import { KnownErrors } from "@stackframe/stack-shared";
 import { fromNow } from "@stackframe/stack-shared/dist/utils/dates";
 import { captureError, StackAssertionError } from '@stackframe/stack-shared/dist/utils/errors';
+import { runAsynchronouslyWithAlert } from "@stackframe/stack-shared/dist/utils/promises";
 import { deindent } from "@stackframe/stack-shared/dist/utils/strings";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import * as yup from "yup";
 import { AppEnabledGuard } from "../../app-enabled-guard";
 import { PageLayout } from "../../page-layout";
@@ -61,6 +62,8 @@ type UserInfoProps = {
   children: React.ReactNode,
   name: string,
 }
+
+type BlockedEmailRecord = Awaited<ReturnType<StackAdminApp["blockEmail"]>>;
 
 function UserInfo({ icon, name, children }: UserInfoProps) {
   return (
@@ -339,6 +342,201 @@ function RestrictedStatusRow({ user }: { user: ServerUser }) {
   );
 }
 
+function BlockedEmailDialog({
+  user,
+  blockedEmail,
+  onBlockedEmailChange,
+  open,
+  onOpenChange,
+}: {
+  user: ServerUser,
+  blockedEmail: BlockedEmailRecord | null,
+  onBlockedEmailChange: (blockedEmail: BlockedEmailRecord | null) => void,
+  open: boolean,
+  onOpenChange: (open: boolean) => void,
+}) {
+  const stackAdminApp = useAdminApp();
+  const [publicReason, setPublicReason] = useState(blockedEmail?.publicReason ?? "");
+  const [privateDetails, setPrivateDetails] = useState(blockedEmail?.privateDetails ?? "");
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleOpenChange = (newOpen: boolean) => {
+    if (newOpen) {
+      setPublicReason(blockedEmail?.publicReason ?? "");
+      setPrivateDetails(blockedEmail?.privateDetails ?? "");
+    }
+    onOpenChange(newOpen);
+  };
+
+  const handleBlock = async () => {
+    if (user.primaryEmail == null) {
+      alert("This user does not have a primary email to block.");
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const nextBlockedEmail = await stackAdminApp.blockEmail({
+        email: user.primaryEmail,
+        publicReason: publicReason.trim() || null,
+        privateDetails: privateDetails.trim() || null,
+      });
+      onBlockedEmailChange(nextBlockedEmail);
+      onOpenChange(false);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleUnblock = async () => {
+    if (blockedEmail == null) {
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      await stackAdminApp.unblockEmail(blockedEmail.id);
+      onBlockedEmailChange(null);
+      onOpenChange(false);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent className="sm:max-w-[500px]">
+        <DialogHeader>
+          <DialogTitle>Blocked Primary Email</DialogTitle>
+          <DialogDescription>
+            Blocking this email prevents new accounts from being created with it and immediately restricts the current user if this is their primary sign-in email.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex flex-col gap-4 py-4">
+          <div className="flex flex-col gap-2">
+            <label className="text-sm font-medium">Email</label>
+            <Input value={user.primaryEmail ?? ""} readOnly disabled />
+          </div>
+          <div className="flex flex-col gap-2">
+            <label className="text-sm font-medium">Public reason (shown to user)</label>
+            <Input
+              value={publicReason}
+              onChange={(e) => setPublicReason(e.target.value)}
+              placeholder="Optional message visible to the user"
+              disabled={isSaving}
+            />
+          </div>
+          <div className="flex flex-col gap-2">
+            <label className="text-sm font-medium">Private details (internal only)</label>
+            <Textarea
+              value={privateDetails}
+              onChange={(e) => setPrivateDetails(e.target.value)}
+              placeholder="Optional internal note for this blocked email"
+              className="min-h-[80px]"
+              disabled={isSaving}
+            />
+          </div>
+        </div>
+        <DialogFooter className="flex-col sm:flex-row gap-2">
+          {blockedEmail && (
+            <Button
+              variant="destructive"
+              onClick={handleUnblock}
+              disabled={isSaving}
+              className="sm:mr-auto"
+            >
+              Unblock email
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={isSaving}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleBlock}
+            disabled={isSaving || user.primaryEmail == null}
+          >
+            Save &amp; block email
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function BlockedEmailStatusRow({ user }: { user: ServerUser }) {
+  const stackAdminApp = useAdminApp();
+  const [blockedEmail, setBlockedEmail] = useState<BlockedEmailRecord | null>(null);
+  const [isLoading, setIsLoading] = useState(user.primaryEmail != null);
+  const [dialogOpen, setDialogOpen] = useState(false);
+
+  useEffect(() => {
+    if (user.primaryEmail == null) {
+      setBlockedEmail(null);
+      setIsLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    runAsynchronouslyWithAlert(async () => {
+      setIsLoading(true);
+      try {
+        const blockedEmails = await stackAdminApp.listBlockedEmails({ email: user.primaryEmail ?? undefined });
+        if (!cancelled) {
+          setBlockedEmail(blockedEmails[0] ?? null);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [stackAdminApp, user.id, user.primaryEmail]);
+
+  const displayValue = user.primaryEmail == null
+    ? "-"
+    : isLoading
+      ? "Loading..."
+      : blockedEmail == null
+        ? "No"
+        : `Yes${blockedEmail.publicReason ? ` — ${blockedEmail.publicReason}` : ""}`;
+
+  return (
+    <>
+      <UserInfo icon={<EnvelopeIcon size={16}/>} name="Primary email blocked">
+        <button
+          type="button"
+          onClick={() => setDialogOpen(true)}
+          disabled={user.primaryEmail == null}
+          className={cn(
+            "w-full text-left px-1 py-0 rounded-md text-sm",
+            "hover:ring-1 hover:ring-slate-300 dark:hover:ring-gray-500 hover:bg-slate-50 dark:hover:bg-gray-800 hover:cursor-pointer",
+            "focus:outline-none focus-visible:ring-1 focus-visible:ring-slate-500 dark:focus-visible:ring-gray-50 focus-visible:bg-slate-100 dark:focus-visible:bg-gray-800",
+            "transition-colors hover:transition-none",
+            user.primaryEmail == null ? "opacity-60 cursor-not-allowed" : "",
+          )}
+        >
+          {displayValue}
+        </button>
+      </UserInfo>
+      <BlockedEmailDialog
+        user={user}
+        blockedEmail={blockedEmail}
+        onBlockedEmailChange={setBlockedEmail}
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+      />
+    </>
+  );
+}
+
 // Restriction banner shown at top of page when user is restricted
 function RestrictionBanner({ user }: { user: ServerUser }) {
   if (!user.isRestricted) return null;
@@ -418,6 +616,7 @@ function UserDetails({ user }: UserDetailsProps) {
         <EditableInput value={user.signedUpAt.toDateString()} readOnly />
       </UserInfo>
       <RestrictedStatusRow user={user} />
+      <BlockedEmailStatusRow user={user} />
     </div>
   );
 }

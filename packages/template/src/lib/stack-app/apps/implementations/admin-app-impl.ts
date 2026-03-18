@@ -14,6 +14,7 @@ import { pick, typedEntries, typedValues } from "@stackframe/stack-shared/dist/u
 import { Result } from "@stackframe/stack-shared/dist/utils/results";
 import { useMemo } from "react"; // THIS_LINE_PLATFORM react-like
 import { AdminEmailOutbox, AdminSentEmail } from "../..";
+import { BlockedEmail, BlockedEmailCreateOptions } from "../../blocked-emails";
 import { EmailConfig, stackAppInternalsSymbol } from "../../common";
 import { AdminEmailTemplate } from "../../email-templates";
 import { InternalApiKey, InternalApiKeyBase, InternalApiKeyBaseCrudRead, InternalApiKeyCreateOptions, InternalApiKeyFirstView, internalApiKeyCreateOptionsToCrud } from "../../internal-api-keys";
@@ -33,6 +34,26 @@ import { PushedConfigSource } from "../../projects";
 import { useAsyncCache } from "./common"; // THIS_LINE_PLATFORM react-like
 
 type BranchConfigSourceApi = yup.InferType<typeof branchConfigSourceSchema>;
+
+function blockedEmailFromCrud(data: {
+  id: string,
+  email: string,
+  public_reason: string | null,
+  private_details: string | null,
+  created_at_millis: number,
+  updated_at_millis: number,
+  created_by_user_id: string | null,
+}): BlockedEmail {
+  return {
+    id: data.id,
+    email: data.email,
+    publicReason: data.public_reason,
+    privateDetails: data.private_details,
+    createdAt: new Date(data.created_at_millis),
+    updatedAt: new Date(data.updated_at_millis),
+    createdByUserId: data.created_by_user_id,
+  };
+}
 
 /**
  * Converts a PushedConfigSource (SDK camelCase) to BranchConfigSourceApi (API snake_case).
@@ -606,6 +627,25 @@ export class _StackAdminAppImplIncomplete<HasTokenStore extends boolean, Project
 
   async sendSignInInvitationEmail(email: string, callbackUrl: string): Promise<void> {
     await this._interface.sendSignInInvitationEmail(email, callbackUrl);
+  }
+
+  async listBlockedEmails(options?: { email?: string }): Promise<BlockedEmail[]> {
+    return (await this._interface.listBlockedEmails(options)).map(blockedEmailFromCrud);
+  }
+
+  async blockEmail(options: BlockedEmailCreateOptions): Promise<BlockedEmail> {
+    const blockedEmail = blockedEmailFromCrud(await this._interface.createBlockedEmail({
+      email: options.email,
+      public_reason: options.publicReason,
+      private_details: options.privateDetails,
+    }));
+    await this._refreshUsers();
+    return blockedEmail;
+  }
+
+  async unblockEmail(id: string): Promise<void> {
+    await this._interface.deleteBlockedEmail(id);
+    await this._refreshUsers();
   }
 
   async createEmailTemplate(displayName: string): Promise<{ id: string }> {

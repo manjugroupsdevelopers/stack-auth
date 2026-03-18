@@ -180,6 +180,10 @@ az disk list -g MC_manjuwellness-auth_stack-auth-aks_centralindia -o table
 
 See [CI-CD-Guide.md](./CI-CD-Guide.md) for GitHub Actions workflow setup.
 
+## Read Replica Setup
+
+For local-first validation and Azure read-replica rollout, use [AZURE-DB-REPLICA-RUNBOOK.md](./AZURE-DB-REPLICA-RUNBOOK.md).
+
 ## Troubleshooting
 
 ### Check pod logs

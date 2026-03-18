@@ -1,19 +1,19 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: stack-auth
+  name: stack-auth-canary
   namespace: stack-auth
   labels:
-    app: stack-auth
+    app: stack-auth-canary
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: stack-auth
+      app: stack-auth-canary
   template:
     metadata:
       labels:
-        app: stack-auth
+        app: stack-auth-canary
     spec:
       imagePullSecrets:
         - name: acr-secret
@@ -39,7 +39,7 @@ spec:
                   name: stack-auth-secrets
                   key: stack-database-replica-connection-string
             - name: STACK_DATABASE_REPLICATION_WAIT_STRATEGY
-              value: "pg-stat-replication"
+              value: "none"
             - name: STACK_SERVER_SECRET
               valueFrom:
                 secretKeyRef:
@@ -120,31 +120,18 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: stack-auth-backend
+  name: stack-auth-canary
   namespace: stack-auth
   labels:
-    app: stack-auth
+    app: stack-auth-canary
 spec:
-  type: LoadBalancer
+  type: ClusterIP
   ports:
-    - port: 80
+    - port: 8101
+      targetPort: 8101
+      name: dashboard
+    - port: 8102
       targetPort: 8102
       name: backend
   selector:
-    app: stack-auth
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: stack-auth-dashboard
-  namespace: stack-auth
-  labels:
-    app: stack-auth
-spec:
-  type: LoadBalancer
-  ports:
-    - port: 80
-      targetPort: 8101
-      name: dashboard
-  selector:
-    app: stack-auth
+    app: stack-auth-canary

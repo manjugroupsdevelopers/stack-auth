@@ -40,6 +40,8 @@
     "db:seed": "pnpm pre && pnpm run --filter=@stackframe/stack-backend db:seed",
     "db:init": "pnpm pre && pnpm run --filter=@stackframe/stack-backend db:init",
     "db:migrate": "pnpm pre && pnpm run --filter=@stackframe/stack-backend db:migrate",
+    "verify-db-replica": "bash ./scripts/verify-db-replica.sh",
+    "test-local-db-replica": "bash ./scripts/test-local-db-replica.sh",
     "fern": "pnpm pre && pnpm run --filter=@stackframe/docs fern",
     "dev:full": "pnpm pre && concurrently -k \"pnpm run generate-sdks:watch\" \"turbo run dev --concurrency 99999\"",
     "dev": "pnpm pre && concurrently -k \"pnpm run generate-sdks:watch\" \"pnpm run generate-openapi-docs:watch\" \"turbo run dev --concurrency 99999 --filter=./apps/* --filter=@stackframe/stack-docs --filter=./packages/* --filter=./examples/demo \"",
