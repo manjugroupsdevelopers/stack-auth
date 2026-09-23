@@ -135,34 +135,31 @@ async function sendOtpSmsViaAirtel(options: { phoneNumber: string, otp: string, 
   const entityId = getEnvVariable("STACK_AIRTEL_SMS_ENTITY_ID", getEnvVariable("AIRTEL_SMS_ENTITY_ID", ""));
   const messageType = getEnvVariable("STACK_AIRTEL_SMS_MESSAGE_TYPE", getEnvVariable("AIRTEL_SMS_MESSAGE_TYPE", "SERVICE_IMPLICIT"));
   const sourceAddress = getEnvVariable("STACK_AIRTEL_SMS_SOURCE_ADDRESS", getEnvVariable("AIRTEL_SMS_SOURCE_ADDRESS", ""));
+  const transport = getEnvVariable("STACK_AIRTEL_SMS_TRANSPORT", "fetch");
 
   if (!customerId || !dltTemplateId || !entityId || !sourceAddress) {
     throw new StackAssertionError("Airtel SMS provider is missing required STACK_AIRTEL_SMS_* environment variables");
   }
 
-  const response = await fetch(apiUrl, {
-    method: "POST",
-    headers: {
-      "accept": "application/json",
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({
-      customerId,
-      destinationAddress: [options.phoneNumber],
-      dltTemplateId,
-      entityId,
-      message: options.message,
-      messageType,
-      sourceAddress,
-    }),
+  const requestBody = JSON.stringify({
+    customerId,
+    destinationAddress: [options.phoneNumber],
+    dltTemplateId,
+    entityId,
+    message: options.message,
+    messageType,
+    sourceAddress,
   });
 
-  const responseBody = await response.text();
-  if (!response.ok) {
-    throw new StackAssertionError(`Failed to send SMS via Airtel API: ${response.status} ${responseBody}`);
+  const response = transport === "node-https"
+    ? await postJsonViaNodeHttps(apiUrl, requestBody)
+    : await postJsonViaFetch(apiUrl, requestBody);
+
+  if (response.status < 200 || response.status >= 300) {
+    throw new StackAssertionError(`Failed to send SMS via Airtel API: ${response.status} ${response.body}`);
   }
 
-  const parsedResponse: unknown = JSON.parse(responseBody);
+  const parsedResponse: unknown = JSON.parse(response.body);
   if (
     typeof parsedResponse !== "object"
     || parsedResponse === null
@@ -172,10 +169,59 @@ async function sendOtpSmsViaAirtel(options: { phoneNumber: string, otp: string, 
     || !Array.isArray(parsedResponse.incorrectNum)
     || parsedResponse.incorrectNum.length > 0
   ) {
-    throw new StackAssertionError(`Failed to send SMS via Airtel API: ${response.status} ${responseBody}`);
+    throw new StackAssertionError(`Failed to send SMS via Airtel API: ${response.status} ${response.body}`);
   }
 
   console.info("Airtel SMS accepted OTP message", { messageRequestId: parsedResponse.messageRequestId });
+}
+
+async function postJsonViaFetch(apiUrl: string, requestBody: string): Promise<{ status: number, body: string }> {
+  const response = await fetch(apiUrl, {
+    method: "POST",
+    headers: {
+      "accept": "application/json",
+      "content-type": "application/json",
+    },
+    body: requestBody,
+  });
+
+  return {
+    status: response.status,
+    body: await response.text(),
+  };
+}
+
+async function postJsonViaNodeHttps(apiUrl: string, requestBody: string): Promise<{ status: number, body: string }> {
+  const { request } = await import("node:https");
+  const url = new URL(apiUrl);
+
+  return await new Promise((resolve, reject) => {
+    const req = request(url, {
+      method: "POST",
+      headers: {
+        "accept": "application/json",
+        "content-type": "application/json",
+        "content-length": Buffer.byteLength(requestBody),
+        // Airtel's Kong edge accepts curl/node:https but rejects Node fetch's default undici request shape.
+        "user-agent": "curl/8.7.1",
+      },
+    }, (res) => {
+      let responseBody = "";
+      res.setEncoding("utf8");
+      res.on("data", (chunk) => {
+        responseBody += chunk;
+      });
+      res.on("end", () => {
+        resolve({
+          status: res.statusCode ?? 0,
+          body: responseBody,
+        });
+      });
+    });
+
+    req.on("error", reject);
+    req.end(requestBody);
+  });
 }
 
 async function sendOtpSmsViaBhash(options: { phoneNumber: string, otp: string, message: string }): Promise<void> {
