@@ -23,7 +23,7 @@ export const stackServerApp = new StackServerApp<"nextjs-cookie", true, 'interna
   analytics: {
     replays: {
       maskAllInputs: false,
-      enabled: true,
+      enabled: getPublicEnvVar("NEXT_PUBLIC_STACK_SESSION_REPLAYS_ENABLED") !== "false",
     },
   },
 });

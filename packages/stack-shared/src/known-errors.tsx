@@ -1416,7 +1416,7 @@ const OAuthProviderAccessDenied = createKnownErrorConstructor(
 const ContactChannelAlreadyUsedForAuthBySomeoneElse = createKnownErrorConstructor(
   KnownError,
   "CONTACT_CHANNEL_ALREADY_USED_FOR_AUTH_BY_SOMEONE_ELSE",
-  (type: "email", contactChannelValue?: string, wouldWorkIfEmailWasVerified: boolean = false) => [
+  (type: "email" | "phone", contactChannelValue?: string, wouldWorkIfEmailWasVerified: boolean = false) => [
     409,
     `This ${type} ${contactChannelValue ? `"(${contactChannelValue})"` : ""} is already used for authentication by another account${wouldWorkIfEmailWasVerified ? " but the email is not verified. Please login to your existing account with the method you used to sign up, and then verify your email to sign in with this login method." : "."}`,
     {

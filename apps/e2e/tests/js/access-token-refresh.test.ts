@@ -154,6 +154,50 @@ describe("access token refresh on user property changes", () => {
 
       expect(tokenWithNullTeam).not.toBe(tokenWithTeam);
     });
+
+    it("should include selected team permissions as roles in the access token", async ({ expect }) => {
+      const { clientApp, serverApp, adminApp } = await createApp({
+        config: {
+          credentialEnabled: true,
+          clientTeamCreationEnabled: true,
+        },
+      });
+
+      await adminApp.createTeamPermissionDefinition({
+        id: "doctor",
+        containedPermissionIds: [],
+      });
+      await adminApp.createTeamPermissionDefinition({
+        id: "receptionist",
+        containedPermissionIds: [],
+      });
+
+      await clientApp.signUpWithCredential({
+        email: "test@example.com",
+        password: "password123",
+        verificationCallbackUrl: "http://localhost:3000",
+      });
+
+      const user = await clientApp.getUser({ or: "throw" });
+      const team = await user.createTeam({ displayName: "Clinic" });
+      await user.setSelectedTeam(team);
+
+      const serverUser = await serverApp.getUser(user.id);
+      if (serverUser === null) {
+        throw new Error("Expected the newly signed up user to be readable on the server");
+      }
+      await serverUser.grantPermission(team, "doctor");
+      await serverUser.grantPermission(team, "receptionist");
+
+      await user.update({});
+
+      const accessToken = await user.getAccessToken();
+      expect(accessToken).toBeDefined();
+
+      const payload = decodeAccessToken(accessToken!);
+      expect(payload.selected_team_id).toBe(team.id);
+      expect(payload.roles).toEqual(expect.arrayContaining(["doctor", "receptionist"]));
+    });
   });
 
   describe("restrictedness changes", () => {

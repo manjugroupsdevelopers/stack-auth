@@ -359,7 +359,7 @@ model SessionReplayChunk {
 
 enum ContactChannelType {
   EMAIL
-  // PHONE
+  PHONE
 }
 
 model ContactChannel {
@@ -610,6 +610,7 @@ model VerificationCode {
 
 enum VerificationCodeType {
   ONE_TIME_PASSWORD
+  PHONE_OTP
   PASSWORD_RESET
   CONTACT_CHANNEL_VERIFICATION
   TEAM_INVITATION

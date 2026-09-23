@@ -66,6 +66,9 @@ export const contactChannelsCrudHandlers = createLazyProxy(() => createCrudHandl
         value = normalizeEmail(value);
         break;
       }
+      case 'phone': {
+        break;
+      }
     }
 
     if (auth.type === 'client') {
@@ -153,6 +156,9 @@ export const contactChannelsCrudHandlers = createLazyProxy(() => createCrudHandl
     switch (data.type) {
       case 'email': {
         value = value ? normalizeEmail(value) : undefined;
+        break;
+      }
+      case 'phone': {
         break;
       }
       case undefined: {
@@ -286,10 +292,10 @@ export const contactChannelsCrudHandlers = createLazyProxy(() => createCrudHandl
 }));
 
 
-function crudContactChannelTypeToPrisma(type: "email") {
+function crudContactChannelTypeToPrisma(type: "email" | "phone") {
   return typedToUppercase(type);
 }
 
-function prismaContactChannelTypeToCrud(type: "EMAIL") {
+function prismaContactChannelTypeToCrud(type: "EMAIL" | "PHONE") {
   return typedToLowercase(type);
 }

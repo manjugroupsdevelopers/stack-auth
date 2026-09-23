@@ -161,7 +161,7 @@ export async function setContactChannelAsPrimaryByValue(
   });
 }
 
-async function getAuthContactChannel(
+export async function getAuthContactChannel(
   tx: PrismaTransaction,
   options: {
     tenancyId: string,

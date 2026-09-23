@@ -1,10 +1,11 @@
 import { ContactChannelsCrud } from "@stackframe/stack-shared/dist/interface/crud/contact-channels";
 
+type ContactChannelType = "email" | "phone";
 
 export type ContactChannel = {
   id: string,
   value: string,
-  type: 'email',
+  type: ContactChannelType,
   isPrimary: boolean,
   isVerified: boolean,
   usedForAuth: boolean,
@@ -16,7 +17,7 @@ export type ContactChannel = {
 
 export type ContactChannelCreateOptions = {
   value: string,
-  type: 'email',
+  type: ContactChannelType,
   usedForAuth: boolean,
   isPrimary?: boolean,
 }

@@ -82,6 +82,7 @@ const AUTH_TYPE_LABELS = new Map<string, string>([
 type ColumnKey =
   | "user"
   | "email"
+  | "phone"
   | "userId"
   | "emailStatus"
   | "lastActiveAt"
@@ -96,6 +97,7 @@ type ColumnMetaType = ColumnMeta<ColumnKey>;
 const COLUMN_LAYOUT: ColumnLayoutMap = {
   user: { size: 160, minWidth: 110, maxWidth: 160, width: "clamp(110px, 22vw, 160px)" },
   email: { size: 160, minWidth: 110, maxWidth: 160, width: "clamp(110px, 22vw, 160px)" },
+  phone: { size: 150, minWidth: 110, maxWidth: 150, width: "clamp(110px, 20vw, 150px)" },
   userId: { size: 130, minWidth: 90, maxWidth: 130, width: "clamp(90px, 18vw, 130px)" },
   emailStatus: { size: 110, minWidth: 80, maxWidth: 110, width: "clamp(80px, 16vw, 110px)" },
   lastActiveAt: { size: 110, minWidth: 80, maxWidth: 110, width: "clamp(80px, 16vw, 110px)" },
@@ -469,6 +471,7 @@ function UserTableSkeleton(props: { pageSize: number }) {
   const columnOrder: ColumnKey[] = [
     "user",
     "email",
+    "phone",
     "userId",
     "emailStatus",
     "lastActiveAt",
@@ -479,6 +482,7 @@ function UserTableSkeleton(props: { pageSize: number }) {
   const skeletonHeaders: Record<ColumnKey, string | null> = {
     user: "User",
     email: "Email",
+    phone: "Phone",
     userId: "User ID",
     emailStatus: "Email Verified",
     lastActiveAt: "Last active",
@@ -500,6 +504,9 @@ function UserTableSkeleton(props: { pageSize: number }) {
       }
       case "email": {
         return <Skeleton className="h-3 w-full max-w-[160px]" />;
+      }
+      case "phone": {
+        return <Skeleton className="h-3 w-full max-w-[150px]" />;
       }
       case "userId": {
         return <Skeleton className="h-3 w-full max-w-[130px]" />;
@@ -577,6 +584,15 @@ function createUserColumns(
   return [
     ...getCommonUserColumns<ExtendedServerUser>(),
     columnHelper.display({
+      id: "phone",
+      size: COLUMN_LAYOUT.phone.size,
+      minSize: COLUMN_LAYOUT.phone.minWidth,
+      maxSize: COLUMN_LAYOUT.phone.maxWidth,
+      meta: { columnKey: "phone" } as ColumnMetaType,
+      header: () => <span className="text-xs font-semibold tracking-wide">Phone</span>,
+      cell: ({ row }) => <PhoneCell user={row.original} />,
+    }),
+    columnHelper.display({
       id: "auth",
       size: COLUMN_LAYOUT.auth.size,
       minSize: COLUMN_LAYOUT.auth.minWidth,
@@ -614,6 +630,27 @@ function createUserColumns(
       cell: ({ row }) => <UserActions user={row.original} />,
     }),
   ];
+}
+
+function PhoneCell(props: { user: ExtendedServerUser }) {
+  const channels = props.user.useContactChannels();
+  const phoneChannels = channels.filter((channel) => channel.value.startsWith("+"));
+  if (phoneChannels.length === 0) {
+    return <span className="text-xs text-muted-foreground">No phone</span>;
+  }
+  const phoneChannel = phoneChannels[0];
+
+  return (
+    <div className="flex min-w-0 flex-col gap-1">
+      <span className="truncate text-sm text-foreground" title={phoneChannel.value}>
+        {phoneChannel.value}
+      </span>
+      <div className="flex flex-wrap gap-1">
+        {phoneChannel.isVerified ? <Badge variant="secondary" className="px-1.5 py-0 text-[10px]">Verified</Badge> : null}
+        {phoneChannel.usedForAuth ? <Badge variant="secondary" className="px-1.5 py-0 text-[10px]">Auth</Badge> : null}
+      </div>
+    </div>
+  );
 }
 
 function UserActions(props: { user: ExtendedServerUser }) {

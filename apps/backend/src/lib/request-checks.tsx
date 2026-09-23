@@ -181,7 +181,7 @@ export async function ensureContactChannelDoesNotExists(
   options: {
     tenancyId: string,
     userId: string,
-    type: 'email',
+    type: 'email' | 'phone',
     value: string,
   }
 ) {

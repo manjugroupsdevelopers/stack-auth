@@ -2248,6 +2248,10 @@ export class _StackClientAppImplIncomplete<HasTokenStore extends boolean, Projec
     return await this._interface.sendMagicLinkEmail(email, options?.callbackUrl ?? constructRedirectUrl(this.urls.magicLinkCallback, "callbackUrl"));
   }
 
+  async sendPhoneOtp(phone: string): Promise<Result<{ nonce: string }, KnownErrors["SignUpNotEnabled"]>> {
+    return await this._interface.sendPhoneOtp(phone);
+  }
+
   async resetPassword(options: { password: string, code: string }): Promise<Result<undefined, KnownErrors["VerificationCodeError"]>> {
     return await this._interface.resetPassword(options);
   }
@@ -2657,6 +2661,36 @@ export class _StackClientAppImplIncomplete<HasTokenStore extends boolean, Projec
     try {
       result = await this._catchMfaRequiredError(async () => {
         return await this._interface.signInWithMagicLink(code, session);
+      });
+    } catch (e) {
+      if (KnownErrors.InvalidTotpCode.isInstance(e)) {
+        return Result.error(e);
+      }
+      throw e;
+    }
+
+    if (result.status === 'ok') {
+      await this._signInToAccountWithTokens(result.data);
+      if (!(options?.noRedirect)) {
+        if (result.data.newUser) {
+          await this.redirectToAfterSignUp({ replace: true });
+        } else {
+          await this.redirectToAfterSignIn({ replace: true });
+        }
+      }
+      return Result.ok(undefined);
+    } else {
+      return Result.error(result.error);
+    }
+  }
+
+  async signInWithPhoneOtp(code: string, options?: { noRedirect?: boolean }): Promise<Result<undefined, KnownErrors["VerificationCodeError"] | KnownErrors["InvalidTotpCode"]>> {
+    this._ensurePersistentTokenStore();
+    const session = await this._getSession();
+    let result;
+    try {
+      result = await this._catchMfaRequiredError(async () => {
+        return await this._interface.signInWithPhoneOtp(code, session);
       });
     } catch (e) {
       if (KnownErrors.InvalidTotpCode.isInstance(e)) {

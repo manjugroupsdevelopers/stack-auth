@@ -61,6 +61,8 @@ jobs:
             --force
 
       - name: Update deployment with new image
+        env:
+          STACK_AIRIX_SMS_API_KEY: ${{ secrets.STACK_AIRIX_SMS_API_KEY }}
         run: |
           IMAGE_TAG=$(echo ${{ github.sha }} | cut -c1-8)
           echo "Updating AKS deployment with image tag: $IMAGE_TAG"
@@ -70,10 +72,27 @@ jobs:
             --resource-group ${{ env.RESOURCE_GROUP }} \
             --name ${{ env.AKS_CLUSTER }} \
             --overwrite-existing
+
+          kubectl get secret stack-auth-secrets -n stack-auth >/dev/null 2>&1 || \
+            kubectl create secret generic stack-auth-secrets -n stack-auth
+
+          secret_patch=$(jq -n \
+            --arg airix_sms_api_key "${STACK_AIRIX_SMS_API_KEY}" \
+            '{stringData:{ "stack-airix-sms-api-key":$airix_sms_api_key }}')
+          kubectl patch secret stack-auth-secrets -n stack-auth --type merge -p "${secret_patch}"
+
+          kubectl apply -f k8s/stack-auth.yaml
           
           # Update the deployment image
           kubectl set image deployment/stack-auth \
             stack-auth=${{ env.ACR_NAME }}.azurecr.io/stack-auth/server:$IMAGE_TAG \
+            --namespace stack-auth
+
+          kubectl set env deployment/stack-auth \
+            STACK_SMS_PROVIDER=airix \
+            STACK_AIRIX_SMS_API_URL=https://api-mfpl.theairix.com/api/integrations/otp/send \
+            STACK_AIRIX_SMS_APP_ID=airix-meet \
+            STACK_AIRIX_SMS_MESSAGE_TYPE=verification \
             --namespace stack-auth
 
       - name: Verify deployment
