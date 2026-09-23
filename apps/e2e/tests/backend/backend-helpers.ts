@@ -289,6 +289,7 @@ export namespace Auth {
         "email": expect.toSatisfy(() => true),
         "email_verified": expect.any(Boolean),
         "selected_team_id": expect.toSatisfy(() => true),
+        "roles": expect.any(Array),
         "is_anonymous": expect.any(Boolean),
         "is_restricted": expect.any(Boolean),
         "restricted_reason": expect.toSatisfy(() => true),
@@ -489,6 +490,96 @@ export namespace Auth {
       if (projectKeys === "no-project") throw new StackAssertionError("Must provide project keys in the backend context before calling signInWithCode");
 
       const response = await niceBackendFetch("/api/v1/auth/otp/sign-in", {
+        method: "POST",
+        accessType: "client",
+        body: {
+          code: signInCode,
+        },
+      });
+      expect(response).toMatchObject({
+        status: 200,
+        body: {
+          access_token: expect.any(String),
+          refresh_token: expect.any(String),
+          is_new_user: expect.any(Boolean),
+          user_id: expect.any(String),
+        },
+        headers: expect.anything(),
+      });
+
+      backendContext.set({
+        userAuth: {
+          accessToken: response.body.access_token,
+          refreshToken: response.body.refresh_token,
+        },
+      });
+
+      return {
+        userId: response.body.user_id,
+        signInResponse: response,
+      };
+    }
+  }
+
+  export namespace PhoneOtp {
+    export function createPhoneNumber(): string {
+      const digits = randomUUID().replaceAll(/\D/g, "").padEnd(8, "0").slice(0, 8);
+      return `+1555${digits}`;
+    }
+
+    export async function sendSignInCode(phone: string) {
+      const response = await niceBackendFetch("/api/v1/auth/phone-otp/send-code", {
+        method: "POST",
+        accessType: "client",
+        body: {
+          phone,
+        },
+      });
+      expect(response).toMatchInlineSnapshot(`
+        NiceResponse {
+          "status": 200,
+          "body": { "nonce": <stripped field 'nonce'> },
+          "headers": Headers { <some fields may have been hidden> },
+        }
+      `);
+      return {
+        sendSignInCodeResponse: response,
+      };
+    }
+
+    export async function getOtpFromSmsOutbox(phone: string) {
+      for (let i = 0; true; i++) {
+        const response = await niceBackendFetch("/api/v1/internal/sms/outbox", {
+          method: "GET",
+          accessType: "admin",
+        });
+        const message: { otp: string } | undefined = response.body.items.findLast((item: { phone_number: string }) => item.phone_number === phone);
+        if (message) {
+          return message.otp;
+        }
+        await wait(100 + i * 20);
+        if (i >= 30) {
+          throw new StackAssertionError(`SMS OTP not found after ${i} attempts`, {
+            phone,
+            response,
+          });
+        }
+      }
+    }
+
+    export async function signIn(phone: string = createPhoneNumber()) {
+      const sendSignInCodeRes = await sendSignInCode(phone);
+      const otp = await getOtpFromSmsOutbox(phone);
+      const signInResult = await signInWithCode(`${otp}${sendSignInCodeRes.sendSignInCodeResponse.body.nonce}`);
+      return {
+        phone,
+        ...sendSignInCodeRes,
+        ...signInResult,
+      };
+    }
+
+    export async function signInWithCode(signInCode: string) {
+      const response = await niceBackendFetch("/api/v1/auth/phone-otp/sign-in", {
         method: "POST",
         accessType: "client",
         body: {

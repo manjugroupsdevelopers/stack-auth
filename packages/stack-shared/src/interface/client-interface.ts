@@ -614,6 +614,31 @@ export class StackClientInterface {
     }
   }
 
+  async sendPhoneOtp(
+    phone: string,
+  ): Promise<Result<{ nonce: string }, KnownErrors["SignUpNotEnabled"]>> {
+    const res = await this.sendClientRequestAndCatchKnownError(
+      "/auth/phone-otp/send-code",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          phone,
+        }),
+      },
+      null,
+      [KnownErrors.SignUpNotEnabled]
+    );
+
+    if (res.status === "error") {
+      return Result.error(res.error);
+    } else {
+      return Result.ok(await res.data.json());
+    }
+  }
+
   async resetPassword(
     options: { code: string } & ({ password: string } | { onlyVerifyCode: true })
   ): Promise<Result<undefined, KnownErrors["VerificationCodeError"]>> {
@@ -959,6 +984,34 @@ export class StackClientInterface {
   async signInWithMagicLink(code: string, session: InternalSession): Promise<Result<{ newUser: boolean, accessToken: string, refreshToken: string }, KnownErrors["VerificationCodeError"]>> {
     const res = await this.sendClientRequestAndCatchKnownError(
       "/auth/otp/sign-in",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          code,
+        }),
+      },
+      session,
+      [KnownErrors.VerificationCodeError]
+    );
+
+    if (res.status === "error") {
+      return Result.error(res.error);
+    }
+
+    const result = await res.data.json();
+    return Result.ok({
+      accessToken: result.access_token,
+      refreshToken: result.refresh_token,
+      newUser: result.is_new_user,
+    });
+  }
+
+  async signInWithPhoneOtp(code: string, session: InternalSession): Promise<Result<{ newUser: boolean, accessToken: string, refreshToken: string }, KnownErrors["VerificationCodeError"]>> {
+    const res = await this.sendClientRequestAndCatchKnownError(
+      "/auth/phone-otp/sign-in",
       {
         method: "POST",
         headers: {

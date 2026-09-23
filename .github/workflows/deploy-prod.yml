@@ -152,6 +152,7 @@ jobs:
           STACK_INTERNAL_PROJECT_PUBLISHABLE_CLIENT_KEY: ${{ secrets.STACK_INTERNAL_PROJECT_PUBLISHABLE_CLIENT_KEY }}
           STACK_INTERNAL_PROJECT_SECRET_SERVER_KEY: ${{ secrets.STACK_INTERNAL_PROJECT_SECRET_SERVER_KEY }}
           STACK_INTERNAL_PROJECT_SUPER_SECRET_ADMIN_KEY: ${{ secrets.STACK_INTERNAL_PROJECT_SUPER_SECRET_ADMIN_KEY }}
+          STACK_AIRIX_SMS_API_KEY: ${{ secrets.STACK_AIRIX_SMS_API_KEY }}
         run: |
           set -euo pipefail
 
@@ -166,12 +167,14 @@ jobs:
             --arg publishable "${STACK_INTERNAL_PROJECT_PUBLISHABLE_CLIENT_KEY}" \
             --arg secret_server "${STACK_INTERNAL_PROJECT_SECRET_SERVER_KEY}" \
             --arg super_admin "${STACK_INTERNAL_PROJECT_SUPER_SECRET_ADMIN_KEY}" \
+            --arg airix_sms_api_key "${STACK_AIRIX_SMS_API_KEY}" \
             '{stringData:{
               "stack-server-secret":$server_secret,
               "stack-sandbox-api-token":$sandbox_api_token,
               "stack-seed-internal-project-publishable-client-key":$publishable,
               "stack-seed-internal-project-secret-server-key":$secret_server,
-              "stack-seed-internal-project-super-secret-admin-key":$super_admin
+              "stack-seed-internal-project-super-secret-admin-key":$super_admin,
+              "stack-airix-sms-api-key":$airix_sms_api_key
             }}')
           kubectl patch secret stack-auth-secrets -n "${NAMESPACE_APP}" --type merge -p "${app_patch}"
 

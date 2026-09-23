@@ -1,9 +1,10 @@
 import { usersCrudHandlers } from '@/app/api/latest/users/crud';
 import { withExternalDbSyncUpdate } from '@/lib/external-db-sync';
+import { listPermissions } from '@/lib/permissions';
 import { getPrismaClientForTenancy, globalPrismaClient } from '@/prisma-client';
 import { KnownErrors } from '@stackframe/stack-shared';
 import type { RestrictedReason } from "@stackframe/stack-shared/dist/schema-fields";
-import { restrictedReasonSchema, yupBoolean, yupNumber, yupObject, yupString } from "@stackframe/stack-shared/dist/schema-fields";
+import { restrictedReasonSchema, yupArray, yupBoolean, yupNumber, yupObject, yupString } from "@stackframe/stack-shared/dist/schema-fields";
 import { AccessTokenPayload } from '@stackframe/stack-shared/dist/sessions';
 import { generateSecureRandomString } from '@stackframe/stack-shared/dist/utils/crypto';
 import { getEnvVariable } from '@stackframe/stack-shared/dist/utils/env';
@@ -27,6 +28,7 @@ const accessTokenSchema = yupObject({
   isAnonymous: yupBoolean().defined(),
   isRestricted: yupBoolean().defined(),
   restrictedReason: restrictedReasonSchema.nullable().defined(),
+  roles: yupArray(yupString().defined()).defined(),
 }).defined();
 
 export const oauthCookieSchema = yupObject({
@@ -166,6 +168,7 @@ export async function decodeAccessToken(accessToken: string, { allowAnonymous, a
       isAnonymous,
       isRestricted,
       restrictedReason,
+      roles: payload.roles ?? [],
     });
 
     return Result.ok(result);
@@ -242,6 +245,13 @@ export async function generateAccessTokenFromRefreshTokenIfValid(options: Refres
 
   // Get end user IP info for session tracking and event logging
   const ipInfo = await getEndUserIpInfoForEvent();
+  const roles = user.selected_team_id === null ? [] : (await listPermissions(prisma, {
+    tenancy: options.tenancy,
+    userId: options.refreshTokenObj.projectUserId,
+    recursive: true,
+    scope: "team",
+    teamId: user.selected_team_id,
+  })).map((permission) => permission.id);
 
   await Promise.all([
     prisma.projectUser.update({
@@ -309,6 +319,7 @@ export async function generateAccessTokenFromRefreshTokenIfValid(options: Refres
     email: user.primary_email,
     email_verified: user.primary_email_verified,
     selected_team_id: user.selected_team_id,
+    roles,
     is_anonymous: user.is_anonymous,
     is_restricted: user.is_restricted,
     restricted_reason: user.restricted_reason,
@@ -325,6 +336,7 @@ export async function generateAccessTokenFromRefreshTokenIfValid(options: Refres
       isAnonymous: user.is_anonymous,
       isRestricted: user.is_restricted,
       restrictedReason: user.restricted_reason,
+      roles,
     });
   } catch (error) {
     captureError("generated-access-token-payload-does-not-fit-the-access-token-schema", new StackAssertionError("Generated access token payload does not fit the accessTokenSchema. This is a bug — the token data is inconsistent.", { cause: error, payload }));

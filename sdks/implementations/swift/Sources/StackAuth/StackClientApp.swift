@@ -447,6 +447,37 @@ public actor StackClientApp {
         
         await client.setTokens(accessToken: accessToken, refreshToken: refreshToken)
     }
+
+    public func sendPhoneOtp(phone: String) async throws -> String {
+        let (data, _) = try await client.sendRequest(
+            path: "/auth/phone-otp/send-code",
+            method: "POST",
+            body: ["phone": phone]
+        )
+
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let nonce = json["nonce"] as? String else {
+            throw StackAuthError(code: "parse_error", message: "Failed to parse phone OTP response")
+        }
+
+        return nonce
+    }
+
+    public func signInWithPhoneOtp(code: String) async throws {
+        let (data, _) = try await client.sendRequest(
+            path: "/auth/phone-otp/sign-in",
+            method: "POST",
+            body: ["code": code]
+        )
+
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let accessToken = json["access_token"] as? String,
+              let refreshToken = json["refresh_token"] as? String else {
+            throw StackAuthError(code: "parse_error", message: "Failed to parse phone OTP sign-in response")
+        }
+
+        await client.setTokens(accessToken: accessToken, refreshToken: refreshToken)
+    }
     
     // MARK: - MFA
     

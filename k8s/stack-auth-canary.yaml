@@ -58,6 +58,19 @@ spec:
               value: "90000"
             - name: STACK_SANDBOX_ALLOWED_MODULES
               value: "react@19.1.1,react-dom@19.1.1,@react-email/components@1.0.6,arktype@2.1.20"
+            - name: STACK_SMS_PROVIDER
+              value: "airix"
+            - name: STACK_AIRIX_SMS_API_URL
+              value: "https://api-mfpl.theairix.com/api/integrations/otp/send"
+            - name: STACK_AIRIX_SMS_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: stack-auth-secrets
+                  key: stack-airix-sms-api-key
+            - name: STACK_AIRIX_SMS_APP_ID
+              value: "airix-meet"
+            - name: STACK_AIRIX_SMS_MESSAGE_TYPE
+              value: "verification"
             - name: NEXT_PUBLIC_STACK_API_URL
               value: "https://api.manjuauth.aivida.in"
             - name: NEXT_PUBLIC_STACK_DASHBOARD_URL
