@@ -52,13 +52,23 @@ export async function sendOtpSms(options: { phoneNumber: string, otp: string }):
   }
 
   if (provider === "airtel-whatsapp") {
-    await Promise.all([
+    const results = await Promise.allSettled([
       sendOtpSmsViaAirtel({
         ...options,
         message,
       }),
       sendOtpViaWhatsApp(options),
     ]);
+
+    const failures = results.filter((result) => result.status === "rejected");
+    for (const failure of failures) {
+      console.error("One OTP delivery channel failed while another may have succeeded", failure.reason);
+    }
+
+    if (failures.length === results.length) {
+      throw new StackAssertionError("Failed to send OTP through Airtel SMS and Airix WhatsApp", { cause: new AggregateError(failures.map((failure) => failure.reason)) });
+    }
+
     return;
   }
 

@@ -65,3 +65,6 @@ A: Use `STACK_SMS_PROVIDER=airtel-whatsapp` to keep the public Stack Auth phone 
 
 ## Q: How should Aivida send 6-digit OTPs through Airtel after DLT template approval?
 A: Use Airtel DLT template `1077324490091202100` with `STACK_PHONE_OTP_LENGTH=6` and `STACK_SMS_OTP_MESSAGE_TEMPLATE=Manju Wellness LLP: Your AIVIDA signup verification OTP is {otp}. This OTP is valid for 10 minutes. Please do not share this OTP with anyone.`. Airtel accepted this message from the prod host, but rejected Node fetch/undici from inside the prod container with 401, so set `STACK_AIRTEL_SMS_TRANSPORT=node-https` to send the same JSON through Node's classic HTTPS client while keeping `STACK_SMS_PROVIDER=airtel-whatsapp`.
+
+## Q: How should Aivida handle one OTP channel failing when the other succeeds?
+A: For `STACK_SMS_PROVIDER=airtel-whatsapp`, return success if either Airtel SMS or Airix WhatsApp accepts the OTP, and fail only when both delivery channels fail. Log each failed channel loudly so Airtel/WhatsApp delivery problems can still be investigated without blocking sign-in for users who received the OTP on the other channel.

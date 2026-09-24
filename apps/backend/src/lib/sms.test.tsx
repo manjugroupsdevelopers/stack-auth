@@ -318,4 +318,104 @@ describe('sendOtpSms', () => {
       }
     `);
   });
+
+  it('allows Airtel SMS to fail when Airix WhatsApp accepts the OTP', async () => {
+    vi.stubEnv('STACK_SMS_PROVIDER', 'airtel-whatsapp');
+    vi.stubEnv('STACK_SMS_OTP_MESSAGE_TEMPLATE', 'Manju Wellness LLP: Your AIVIDA signup verification OTP is {otp}. This OTP is valid for 10 minutes. Please do not share this OTP with anyone.');
+    vi.stubEnv('STACK_AIRTEL_SMS_API_URL', 'https://iqsms.airtel.in/api/v1/send-prepaid-sms');
+    vi.stubEnv('STACK_AIRTEL_SMS_CUSTOMER_ID', '8dfa792b-7695-4054-ad5b-0ac872a05453');
+    vi.stubEnv('STACK_AIRTEL_SMS_DLT_TEMPLATE_ID', '1077324490091202100');
+    vi.stubEnv('STACK_AIRTEL_SMS_ENTITY_ID', '1001711943218436692');
+    vi.stubEnv('STACK_AIRTEL_SMS_MESSAGE_TYPE', 'SERVICE_IMPLICIT');
+    vi.stubEnv('STACK_AIRTEL_SMS_SOURCE_ADDRESS', 'MNJWLL');
+    vi.stubEnv('STACK_AIRIX_WHATSAPP_API_URL', 'https://api-whatsapp.theairix.com/api/v1/messages');
+    vi.stubEnv('STACK_AIRIX_WHATSAPP_BEARER_TOKEN', 'test-whatsapp-token');
+    vi.stubEnv('STACK_AIRIX_WHATSAPP_ACCOUNT_ID', 'a20a8238-14cd-4c5c-8db0-71c1975366d1');
+    vi.stubEnv('STACK_AIRIX_WHATSAPP_TEMPLATE_NAME', 'manju_groups_otp');
+    vi.stubEnv('STACK_AIRIX_WHATSAPP_LANGUAGE_CODE', 'en');
+    vi.stubEnv('STACK_AIRIX_WHATSAPP_METADATA_USE_CASE', 'login_otp');
+
+    vi.spyOn(crypto, 'randomUUID').mockReturnValue('00000000-0000-4000-8000-000000000000');
+    const consoleErrorMock = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const fetchMock = vi.fn(async (url: unknown) => {
+      if (url === 'https://iqsms.airtel.in/api/v1/send-prepaid-sms') {
+        return new Response(JSON.stringify({
+          message: 'Unauthorized',
+        }), { status: 401 });
+      }
+
+      return new Response(JSON.stringify({
+        status: "ok",
+        data: {
+          jobId: "test-job-id",
+          messageId: "test-message-id",
+          status: "queued",
+          statusUrl: "/api/v1/messages/test-message-id",
+        },
+      }), { status: 200 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(sendOtpSms({
+      phoneNumber: '+916369487527',
+      otp: '123456',
+    })).resolves.toBeUndefined();
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://iqsms.airtel.in/api/v1/send-prepaid-sms');
+    expect(fetchMock.mock.calls[1]?.[0]).toBe('https://api-whatsapp.theairix.com/api/v1/messages');
+    expect(consoleErrorMock).toHaveBeenCalledWith(
+      'One OTP delivery channel failed while another may have succeeded',
+      expect.any(StackAssertionError),
+    );
+  });
+
+  it('allows Airix WhatsApp to fail when Airtel SMS accepts the OTP', async () => {
+    vi.stubEnv('STACK_SMS_PROVIDER', 'airtel-whatsapp');
+    vi.stubEnv('STACK_SMS_OTP_MESSAGE_TEMPLATE', 'Manju Wellness LLP: Your AIVIDA signup verification OTP is {otp}. This OTP is valid for 10 minutes. Please do not share this OTP with anyone.');
+    vi.stubEnv('STACK_AIRTEL_SMS_API_URL', 'https://iqsms.airtel.in/api/v1/send-prepaid-sms');
+    vi.stubEnv('STACK_AIRTEL_SMS_CUSTOMER_ID', '8dfa792b-7695-4054-ad5b-0ac872a05453');
+    vi.stubEnv('STACK_AIRTEL_SMS_DLT_TEMPLATE_ID', '1077324490091202100');
+    vi.stubEnv('STACK_AIRTEL_SMS_ENTITY_ID', '1001711943218436692');
+    vi.stubEnv('STACK_AIRTEL_SMS_MESSAGE_TYPE', 'SERVICE_IMPLICIT');
+    vi.stubEnv('STACK_AIRTEL_SMS_SOURCE_ADDRESS', 'MNJWLL');
+    vi.stubEnv('STACK_AIRIX_WHATSAPP_API_URL', 'https://api-whatsapp.theairix.com/api/v1/messages');
+    vi.stubEnv('STACK_AIRIX_WHATSAPP_BEARER_TOKEN', 'test-whatsapp-token');
+    vi.stubEnv('STACK_AIRIX_WHATSAPP_ACCOUNT_ID', 'a20a8238-14cd-4c5c-8db0-71c1975366d1');
+    vi.stubEnv('STACK_AIRIX_WHATSAPP_TEMPLATE_NAME', 'manju_groups_otp');
+
+    vi.spyOn(crypto, 'randomUUID').mockReturnValue('00000000-0000-4000-8000-000000000000');
+    const consoleErrorMock = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const fetchMock = vi.fn(async (url: unknown) => {
+      if (url === 'https://iqsms.airtel.in/api/v1/send-prepaid-sms') {
+        return new Response(JSON.stringify({
+          customerId: '8dfa792b-7695-4054-ad5b-0ac872a05453',
+          destinationAddress: ['+916369487527'],
+          dltTemplateId: '1077324490091202100',
+          entityId: '1001711943218436692',
+          incorrectNum: [],
+          message: 'Manju Wellness LLP: Your AIVIDA signup verification OTP is 123456. This OTP is valid for 10 minutes. Please do not share this OTP with anyone.',
+          messageRequestId: '496db4a7-41fc-40b3-88f6-36c8d0cfd4b8',
+          messageType: 'SERVICE_IMPLICIT',
+          sourceAddress: 'MNJWLL',
+        }), { status: 200 });
+      }
+
+      throw new Error('WhatsApp connect timeout');
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(sendOtpSms({
+      phoneNumber: '+916369487527',
+      otp: '123456',
+    })).resolves.toBeUndefined();
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://iqsms.airtel.in/api/v1/send-prepaid-sms');
+    expect(fetchMock.mock.calls[1]?.[0]).toBe('https://api-whatsapp.theairix.com/api/v1/messages');
+    expect(consoleErrorMock).toHaveBeenCalledWith(
+      'One OTP delivery channel failed while another may have succeeded',
+      expect.any(Error),
+    );
+  });
 });
